@@ -4,7 +4,6 @@
 #include <stdarg.h>
 
 
-static void __attribute__((constructor)) init(void);
 void *malloc(size_t size);
 void free(void* ptr);
 void *calloc(size_t nmemb, size_t size);
@@ -31,10 +30,6 @@ const char* msg_size = "size: ";
 const char* msg_ptr = "ptr: ";
 const char* msg_nmemb = "nmemb: ";
 
-static void* (*real_malloc)(size_t);
-static void (*real_free)(void*);
-static void* (*real_calloc)(size_t, size_t);
-static __thread int no_hook;
 
 enum flag {MALLOC, FREE, CALLOC};
 
