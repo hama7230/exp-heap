@@ -31,11 +31,13 @@ static void __attribute__((constructor)) init(void) {
     // get real name
     ssize_t len;
     len = readlink("/proc/self/exe", buf_exe, 0x100);
-    if (len == -1) {
+    if (len < 0) {
         _exit(2);
     }
-    my_puts(buf_exe);
     buf_exe[len] = '\0';
+    my_puts("1.");
+    my_puts(buf_exe);
+    my_puts("2.");
     num_dump(len);
     memcpy(log_name, log_dir, strlen(log_dir));
     for (int i = len-1; i != 0 ; i--) {
@@ -77,7 +79,7 @@ void write_file(int type, size_t nmemb, size_t size, void* ptr) {
             u64tohex(size, buf);          
             write(fd, buf, 0x10);
             write(fd, "\n", 1);
-            u64tohex(ptr, buf);          
+            u64tohex((uint64_t)ptr, buf);          
             write(fd, msg_ptr, strlen(msg_ptr));
             write(fd, buf, 0x10);
             write(fd, "\n", 1);
@@ -93,7 +95,7 @@ void write_file(int type, size_t nmemb, size_t size, void* ptr) {
             u64tohex(size, buf);          
             write(fd, buf, 0x10);
             write(fd, "\n", 1);
-            u64tohex(ptr, buf);          
+            u64tohex((uint64_t)ptr, buf);          
             write(fd, msg_ptr, strlen(msg_ptr));
             write(fd, buf, 0x10);
             write(fd, "\n", 1);
@@ -101,7 +103,7 @@ void write_file(int type, size_t nmemb, size_t size, void* ptr) {
 
         case FREE:
             write(fd, called_free, strlen(called_free));
-            u64tohex(ptr, buf);          
+            u64tohex((uint64_t)ptr, buf);          
             write(fd, msg_ptr, strlen(msg_ptr));
             write(fd, buf, 0x10);
             write(fd, "\n", 1);
@@ -172,7 +174,7 @@ void *calloc(size_t nmemb, size_t size) {
 void u64tohex(uint64_t tb, char buf[17]) {
   const char sym[] = "0123456789abcdef";
   const size_t n = 16; 
-  int i;
+  size_t i;
 
   for (i=1; i <= n; i++) {
     char c = sym[tb % 0x10];
