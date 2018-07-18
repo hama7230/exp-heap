@@ -16,7 +16,7 @@ static void *tmp;
 static size_t mapping_size;
 char buf_exe[0x100];
 
-static int g_fd;
+static int g_fd = 0;
 
 void num_dump(unsigned long tb);
 static void* (*real_malloc)(size_t);
@@ -36,30 +36,6 @@ static void __attribute__((constructor)) init(void) {
         _exit(1);
     }
 
-    // get real name
-    ssize_t len;
-    len = readlink("/proc/self/exe", buf_exe, sizeof(buf_exe)-1);
-    if (len < 0) {
-        _exit(2);
-    }
-    buf_exe[len] = '\0';
-    my_puts("1.");
-    my_puts(buf_exe);
-    my_puts("2.");
-    num_dump(len);
-    memcpy(log_name, log_dir, strlen(log_dir));
-    for (int i = len-1; i != 0 ; i--) {
-        if (buf_exe[i] == '/') {
-            memcpy(log_name+strlen(log_dir), buf_exe+i+1, len-i); 
-            my_puts(buf_exe+i+1);
-            break;
-        } 
-    }
-    my_puts(log_name);
-    g_fd = open(log_name, O_RDWR|O_APPEND|O_CREAT);
-    if (g_fd < 0) {
-        _exit(3);
-    }
 }
 
 
@@ -79,7 +55,28 @@ size_t my_strlen(char* buf) {
 
 void write_file(int type, size_t nmemb, size_t size, void* ptr) {
     char buf[0x10];
+    ssize_t len;
+    if (g_fd == 0) {
+        len = readlink("/proc/self/exe", buf_exe, sizeof(buf_exe)-1);
+        if (len < 0) {
+            _exit(2);
+        }
+        buf_exe[len] = '\0';
+        memcpy(log_name, log_dir, strlen(log_dir));
+        for (int i = len-1; i != 0 ; i--) {
+            if (buf_exe[i] == '/') {
+                memcpy(log_name+strlen(log_dir), buf_exe+i+1, len-i); 
+                my_puts(buf_exe+i+1);
+                break;
+            } 
+        }
 
+        g_fd = open(log_name, O_RDWR|O_APPEND|O_CREAT);
+        if (g_fd < 0) {
+            _exit(3);
+        }
+    }
+    
     switch (type) {
         case MALLOC:
             write(g_fd, called_malloc, strlen(called_malloc));
