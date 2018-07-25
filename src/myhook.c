@@ -54,7 +54,7 @@ size_t my_strlen(char* buf) {
 }
 
 void write_file(int type, size_t nmemb, size_t size, void* ptr) {
-    char buf[0x10];
+    char buf[0x30];
     ssize_t len;
     if (g_fd == 0) {
         len = readlink("/proc/self/exe", buf_exe, sizeof(buf_exe)-1);
@@ -80,28 +80,23 @@ void write_file(int type, size_t nmemb, size_t size, void* ptr) {
     switch (type) {
         case MALLOC:
             write(g_fd, called_malloc, strlen(called_malloc));
-            write(g_fd, msg_size, strlen(msg_size));
             u64tohex(size, buf);          
             write(g_fd, buf, 0x10);
-            write(g_fd, "\n", 1);
+            write(g_fd, " ", 1);
             u64tohex((uint64_t)ptr, buf);          
-            write(g_fd, msg_ptr, strlen(msg_ptr));
             write(g_fd, buf, 0x10);
             write(g_fd, "\n", 1);
             break;
         
         case CALLOC:
             write(g_fd, called_calloc, strlen(called_calloc));
-            write(g_fd, msg_nmemb, strlen(msg_nmemb));
             u64tohex(nmemb, buf);
             write(g_fd, buf, 0x10);
-            write(g_fd, "\n", 1);
-            write(g_fd, msg_size, strlen(msg_size));
+            write(g_fd, " ", 1);
             u64tohex(size, buf);          
             write(g_fd, buf, 0x10);
-            write(g_fd, "\n", 1);
+            write(g_fd, " ", 1);
             u64tohex((uint64_t)ptr, buf);          
-            write(g_fd, msg_ptr, strlen(msg_ptr));
             write(g_fd, buf, 0x10);
             write(g_fd, "\n", 1);
             break;
@@ -109,10 +104,9 @@ void write_file(int type, size_t nmemb, size_t size, void* ptr) {
         case FREE:
             write(g_fd, called_free, strlen(called_free));
             u64tohex((uint64_t)ptr, buf);          
-            write(g_fd, msg_ptr, strlen(msg_ptr));
             write(g_fd, buf, 0x10);
             write(g_fd, "\n", 1);
-            break;            
+            break;
     };
     
 }
