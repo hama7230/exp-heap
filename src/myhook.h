@@ -15,6 +15,7 @@ void write_file(int type, size_t nmemb, size_t size, void* ptr);
 int ssprintf(char* buf, char* fmt, ...);
 int vtsprintf(char* buff,char* fmt,va_list arg);
 void u64tohex(uint64_t tb, char buf[17]);
+void int_handler(int signum);
 
 //const char* log_name = "trace.log";
 char log_name[0x100];

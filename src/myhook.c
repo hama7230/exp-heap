@@ -9,12 +9,14 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <stdint.h>
+#include <signal.h>
 #include "myhook.h"
 
 
 static void *tmp;
 static size_t mapping_size;
 char buf_exe[0x100];
+char buf_dump[0x100];
 
 static int g_fd = 0;
 
@@ -23,6 +25,10 @@ static void* (*real_malloc)(size_t);
 static void (*real_free)(void*);
 static void* (*real_calloc)(size_t, size_t);
 static __thread int no_hook;
+
+static void* heap_base = NULL;
+static void* heap_end = NULL;
+static int called = 0;
 
 
 static void __attribute__((constructor)) init(void) {
@@ -35,9 +41,30 @@ static void __attribute__((constructor)) init(void) {
         write(1, fail_msg, strlen(fail_msg));
         _exit(1);
     }
-
+    
+    if (signal(SIGINT, int_handler) == SIG_ERR) {
+        _exit(1);
+    }
 }
 
+void int_handler(int signum) {
+    char buf[0x20];
+    int fd;
+    u64tohex((uint64_t)heap_base, buf);
+    write(1, buf, 0x10);
+    u64tohex((uint64_t)heap_end, buf);
+    write(1, buf, 0x10);
+    strncpy(buf_dump, log_name, 0x100);
+    strncat(buf_dump, ".dump", 0x100);
+    my_puts(buf_dump);
+    fd = open(buf_dump, O_WRONLY);
+    if (fd < 0) {
+        _exit(10);
+    }
+    write(fd, heap_base, heap_end-heap_base);
+    close(fd);
+    _exit(0);
+}
 
 void my_puts(char *msg) {
     size_t length;
@@ -66,7 +93,7 @@ void write_file(int type, size_t nmemb, size_t size, void* ptr) {
         for (int i = len-1; i != 0 ; i--) {
             if (buf_exe[i] == '/') {
                 memcpy(log_name+strlen(log_dir), buf_exe+i+1, len-i); 
-                my_puts(buf_exe+i+1);
+                // my_puts(buf_exe+i+1);
                 break;
             } 
         }
@@ -129,6 +156,15 @@ void *malloc(size_t size) {
     ptr = real_malloc(size);
     write_file(MALLOC, 0xdeadbeef, size, ptr);
     no_hook = 0;
+    if (!called && size < 0x21000) {
+        heap_base = (void*)((uint64_t)ptr & 0xfffffffffffff000);
+        called = 1;
+    }
+    
+    if (heap_end < ptr + size + 0x10) {
+        heap_end = ptr + size + 0x10;
+    }
+    
     return ptr;
 }
 
