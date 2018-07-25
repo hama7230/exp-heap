@@ -2,7 +2,7 @@
 #include <fstream>
 #include <vector>
 
-#define MEM_SIZE 0x21000
+const size_t MEM_SIZE = 0x21000;
 enum function{MALLOC, FREE, REALLOC};
 using namespace std;
 
@@ -34,9 +34,7 @@ class Step {
         int function;
         bool used_flag;
 };
-
-vector<Step*> steps;
-
+vector<Step> steps;
 
 
 int main(int argc, char* argv[]) {
@@ -50,39 +48,28 @@ int main(int argc, char* argv[]) {
     cout << path << endl;
     
     string buf;
-    ifstream ifs; 
-    ifs.open(path); 
-
+    ifstream ifs(path);
+    
     while (getline(ifs, buf)) {
         void* ptr;
         size_t nmemb, size;
         if (buf.find("called") != string::npos) {
             if (buf.find("malloc") != string::npos) {
-                getline(ifs, buf);
-                sscanf(buf.c_str(), "size: %llx", (long long unsigned int*)&size);
-                getline(ifs, buf);
-                sscanf(buf.c_str(), "ptr: %llx", (long long unsigned int*)&ptr);
-                
+                ifs >> size >> ptr;
                 cout << "malloc" << endl;
                 cout << size << endl;
                 cout << ptr << endl;
-                Step *step = new Step(MALLOC, ptr, size, 0xdeadbeef);
-                steps.push_back(step);
+                steps.emplace_back(MALLOC, ptr, size, 0xdeadbeef);
             }
             if (buf.find("free") != string::npos) {
-                getline(ifs, buf);
-                sscanf(buf.c_str(), "ptr: %llx", (long long unsigned int*)&ptr);
-                    
+                ifs >> ptr; 
                 cout << "free" << endl;
                 cout << ptr << endl;
+                steps.emplace_back(FREE, ptr, 0xdeadbeef, 0xdeadbeef);
             }
             if (buf.find("calloc") != string::npos) {
-                getline(ifs, buf);
-                sscanf(buf.c_str(), "nmemb: %llx", (long long unsigned int*)&nmemb);
-                getline(ifs, buf);
-                sscanf(buf.c_str(), "size: %llx", (long long unsigned int*)&size);
-                getline(ifs, buf);
-                sscanf(buf.c_str(), "ptr: %llx", (long long unsigned int*)&ptr);
+                ifs >> nmemb >> size >> ptr;
+                steps.emplace_back(REALLOC, ptr, size, nmemb);
             }
            
         }
