@@ -26,7 +26,11 @@ class Step {
             nmemb = _nmemb;
             used_flag = true; 
         }
-
+        void* get_ptr() { return ptr; }
+        size_t get_size() { return size;}
+        size_t get_nmemb() { return nmemb; }
+        int get_function() { return function; }
+        
     private:
         void* ptr;
         size_t size;
@@ -36,6 +40,8 @@ class Step {
 };
 vector<Step> steps;
 
+
+void print_steps(void);
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
@@ -56,15 +62,10 @@ int main(int argc, char* argv[]) {
         if (buf.find("called") != string::npos) {
             if (buf.find("malloc") != string::npos) {
                 ifs >> size >> ptr;
-                cout << "malloc" << endl;
-                cout << size << endl;
-                cout << ptr << endl;
                 steps.emplace_back(MALLOC, ptr, size, 0xdeadbeef);
             }
             if (buf.find("free") != string::npos) {
                 ifs >> ptr; 
-                cout << "free" << endl;
-                cout << ptr << endl;
                 steps.emplace_back(FREE, ptr, 0xdeadbeef, 0xdeadbeef);
             }
             if (buf.find("calloc") != string::npos) {
@@ -74,11 +75,31 @@ int main(int argc, char* argv[]) {
            
         }
     }
-        
-    ifs.close();
     
-
+    print_steps();
     
     return 0;
 }
+
+
+
+void print_steps(void) {
+    for (auto& s : steps) {
+        switch (s.get_function()) {
+            case MALLOC:
+                cout << "malloc ";
+                cout << s.get_ptr() << " " << s.get_size() << endl; 
+                break;
+            case FREE:
+                cout << "free ";
+                cout << s.get_ptr() << endl;
+                break;
+            case REALLOC:
+                cout << "realloc ";
+                cout << s.get_nmemb() << " " << s.get_ptr() << " " << s.get_size() << endl; 
+                break;
+        };
+    }
+}
+
 
