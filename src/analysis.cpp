@@ -2,41 +2,57 @@
 #include <fstream>
 #include <vector>
 
-const size_t MEM_SIZE = 0x21000;
 enum function{MALLOC, FREE, REALLOC};
 using namespace std;
 
 
 class Mem {
-    public:
-        
-    private:
-        unsigned char memory[MEM_SIZE];
+    static const size_t size = 0x21000;
+    unsigned char memory[size];
 };
+
 static Mem heap;
 
 
 // heapに対する操作を記憶するクラス
 class Step {
-    public:
-        Step(int _function, void* _ptr, size_t _size, size_t _nmemb) {
-            function = _function;
-            ptr = _ptr;
-            size = _size;
-            nmemb = _nmemb;
-            used_flag = true; 
-        }
-        void* get_ptr() { return ptr; }
-        size_t get_size() { return size;}
-        size_t get_nmemb() { return nmemb; }
-        int get_function() { return function; }
-        
     private:
+        int function;
+        bool isUsed;
         void* ptr;
         size_t size;
         size_t nmemb;
-        int function;
-        bool used_flag;
+    public:
+        Step(int _function, void* _ptr, size_t _size, size_t _nmemb)
+            : function(_function)
+            , isUsed(true)
+            , ptr(_ptr)
+            , size(_size)
+            , nmemb(_nmemb)
+        {
+        }
+        void* get_ptr() const { return ptr; }
+        size_t get_size() const { return size;}
+        size_t get_nmemb() const { return nmemb; }
+        int get_function() const { return function; }
+        
+        string toString() const {
+            char buf[0x100];
+            switch(function) {
+                case MALLOC:
+                    snprintf(buf, sizeof(buf), "malloc %p %zd", ptr, size);
+                    break;
+                case FREE:
+                    snprintf(buf, sizeof(buf), "free %p", ptr);
+                    break;
+                case REALLOC:
+                    snprintf(buf, sizeof(buf), "realloc %p %zd %zd", ptr, nmemb, size);
+                    break;
+                default:
+                    break;
+            }
+            return buf;
+        }
 };
 vector<Step> steps;
 
@@ -84,21 +100,8 @@ int main(int argc, char* argv[]) {
 
 
 void print_steps(void) {
-    for (auto& s : steps) {
-        switch (s.get_function()) {
-            case MALLOC:
-                cout << "malloc ";
-                cout << s.get_ptr() << " " << s.get_size() << endl; 
-                break;
-            case FREE:
-                cout << "free ";
-                cout << s.get_ptr() << endl;
-                break;
-            case REALLOC:
-                cout << "realloc ";
-                cout << s.get_nmemb() << " " << s.get_ptr() << " " << s.get_size() << endl; 
-                break;
-        };
+    for (const auto& s : steps) {
+        cout << s.toString() << endl;
     }
 }
 
