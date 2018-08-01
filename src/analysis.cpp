@@ -7,8 +7,9 @@ using namespace std;
 
 
 class Mem {
-    static const size_t size = 0x21000;
-    unsigned char memory[size];
+    public:
+        static const size_t size = 0x21000;
+        unsigned char memory[size];
 };
 
 static Mem heap;
@@ -64,14 +65,12 @@ int main(int argc, char* argv[]) {
         cerr << "Usage: filename" << endl;
         exit(1);
     }
-    cout << argv[1] << endl;
     string path = "/tmp/trace_heap/";
     path = path + argv[1];
-    cout << path << endl;
     
+    // load logfile
     string buf;
-    ifstream ifs(path);
-    
+    ifstream ifs(path);    
     while (getline(ifs, buf)) {
         void* ptr;
         size_t nmemb, size;
@@ -94,6 +93,19 @@ int main(int argc, char* argv[]) {
     
     print_steps();
     
+    // load memory dump
+    path = path + ".dump";
+    ifstream ifs_dump(path, ios::binary | ios::in);
+    if (!ifs_dump.is_open()) {
+        cout << "dump file open error" << endl;
+        return 1;
+    }
+    ifs_dump.seekg(0, ios::end);
+    size_t size = ifs_dump.tellg();
+    cout << size << endl;
+    ifs_dump.read((char*)heap.memory, size);
+    cout.write((char*)heap.memory, size);
+    
     return 0;
 }
 
@@ -104,5 +116,6 @@ void print_steps(void) {
         cout << s.toString() << endl;
     }
 }
+
 
 
