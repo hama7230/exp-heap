@@ -57,7 +57,7 @@ void int_handler(int signum) {
     strncpy(buf_dump, log_name, 0x100);
     strncat(buf_dump, ".dump", 0x100);
     my_puts(buf_dump);
-    fd = open(buf_dump, O_WRONLY);
+    fd = open(buf_dump, O_WRONLY|O_CREAT);
     if (fd < 0) {
         _exit(10);
     }
