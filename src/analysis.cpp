@@ -95,17 +95,20 @@ int main(int argc, char* argv[]) {
     
     // load memory dump
     path = path + ".dump";
-    ifstream ifs_dump(path, ios::binary | ios::in);
+    ifstream ifs_dump(path,  ios::binary);
+    if (!ifs_dump) {
+        cout << "dump file open error" << endl;
+        return 1;
+    }
     if (!ifs_dump.is_open()) {
         cout << "dump file open error" << endl;
         return 1;
     }
+
     ifs_dump.seekg(0, ios::end);
     size_t size = ifs_dump.tellg();
-    cout << size << endl;
+    ifs_dump.seekg(0, ios::beg);
     ifs_dump.read((char*)heap.memory, size);
-    cout.write((char*)heap.memory, size);
-    
     return 0;
 }
 
