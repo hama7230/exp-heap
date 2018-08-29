@@ -2,6 +2,8 @@
 #include <fstream>
 #include <vector>
 #include <algorithm>
+#include <memory>
+
 
 enum function{MALLOC, FREE, REALLOC};
 using namespace std;
@@ -14,6 +16,44 @@ class Mem {
 };
 
 static Mem heap;
+
+// step-by-stepで解析していくときのchunk情報を持つクラス 
+class Chunk {
+    private:
+        bool isUsed;
+        void* addr;
+        size_t prev_size;
+        size_t size;
+        void* fd;
+        void* bk;
+        void* fd_nextsize;
+        void* bk_nextsize;
+    public:
+        Chunk(void* _addr, size_t _size)
+            : isUsed(true)
+            , addr(_addr-0x10)
+            , prev_size(0)
+            , size(_size)
+            , fd(nullptr)
+            , bk(nullptr)
+            , fd_nextsize(nullptr)
+            , bk_nextsize(nullptr)
+        {
+        }
+        
+        void* get_addr() const { return addr; }
+        size_t get_size() const { return size; }
+        bool isFree() const { return !isUsed; }
+        void free(void) {
+            cout << "free()..."  << endl;
+            isUsed = false;
+            
+            
+        }
+        void reuse(void) {
+            isUsed = true;
+        }
+};
 
 
 // heapに対する操作を記憶するクラス
@@ -137,30 +177,64 @@ int main(int argc, char* argv[]) {
 void step_by_step() {
     for (int i=0; i < steps.size(); i++) {
         int j = 0;
-        vector<void*> chunks;
+        // vector<void*> chunks;
+        vector<Chunk> chunks;
         for (const auto& s : steps) {
             if (i < j) 
                 break;
             j++;
             
-            if (s.get_function() == MALLOC || s.get_function() == REALLOC) {
-                chunks.push_back(s.get_ptr());
+            // addrでsort
+            
+            if (s.get_function() == MALLOC) {
+                //chunks.push_back(s.get_ptr());
+                bool isNewchunk = true;
+                for (auto& chunk : chunks) {
+                    // just-fit
+                    if (chunk.isFree() && chunk.get_size() == s.get_size()) {
+                         chunk.reuse();
+                         isNewchunk = false;
+                         break;
+                    }
+                }
+                if (isNewchunk)
+                    chunks.emplace_back(s.get_ptr(), s.get_size());
+            } else if (s.get_function() == REALLOC) {
             } else if (s.get_function() == FREE) {
+                /*
                 vector<void*>::iterator it = find(chunks.begin(), chunks.end(), s.get_ptr());
                 if (it == chunks.end()) {
                     cout << "invalid pointer? or arbitary address free?" << endl;
                 } else {
                     chunks.erase(it);
+                }*/
+                for (auto it = chunks.begin(); it != chunks.end(); it++) {
+                }
+                bool isExisted = false;
+                for (auto& chunk : chunks) {
+                    void* ptr = chunk.get_addr() + 0x10;
+                    if (ptr == s.get_ptr()) {
+                        
+                        // chunkをfree()後の状態にする．
+                        // arenaの更新などなど
+                        chunk.free();
+                        isExisted = true;
+                        break;
+                    }
+                }
+                if (!isExisted) {
+                    cout << "invalid pointer? or arbitary address free?" << endl;
                 }
             } else {
                 cout << "unknown funtion" << endl;
             }
             
         }
-        // finaly log
+        
         cout << "------------------------------" << endl;
         for (const auto& chunk: chunks) {
-            cout << chunk << endl;
+            cout << chunk.get_addr() << endl;
+            cout << chunk.get_size() << endl;
         } 
         cout << "------------------------------" << endl;
     }
