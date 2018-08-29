@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <algorithm>
 
 enum function{MALLOC, FREE, REALLOC};
 using namespace std;
@@ -58,6 +59,8 @@ class Step {
 vector<Step> steps;
 
 
+
+void step_by_step(void);
 void print_steps(void);
 
 int main(int argc, char* argv[]) {
@@ -91,7 +94,6 @@ int main(int argc, char* argv[]) {
         }
     }
     
-    print_steps();
     
     // load memory dump
     path = path + ".dump";
@@ -109,9 +111,60 @@ int main(int argc, char* argv[]) {
     size_t size = ifs_dump.tellg();
     ifs_dump.seekg(0, ios::beg);
     ifs_dump.read((char*)heap.memory, size);
+
+    
+    while(1) {
+        cout << "================================\n1. print steps\n2. print step by step\n3. fugafuga\n" << endl;
+        int choice;
+        cin >> choice;
+        switch (choice) {
+            case 1:
+                print_steps();
+                break;
+            case 2:
+                step_by_step(); 
+                break;
+        }
+    }
+
+
+
     return 0;
+
 }
 
+
+void step_by_step() {
+    for (int i=0; i < steps.size(); i++) {
+        int j = 0;
+        vector<void*> chunks;
+        for (const auto& s : steps) {
+            if (i < j) 
+                break;
+            j++;
+            
+            if (s.get_function() == MALLOC || s.get_function() == REALLOC) {
+                chunks.push_back(s.get_ptr());
+            } else if (s.get_function() == FREE) {
+                vector<void*>::iterator it = find(chunks.begin(), chunks.end(), s.get_ptr());
+                if (it == chunks.end()) {
+                    cout << "invalid pointer? or arbitary address free?" << endl;
+                } else {
+                    chunks.erase(it);
+                }
+            } else {
+                cout << "unknown funtion" << endl;
+            }
+            
+        }
+        // finaly log
+        cout << "------------------------------" << endl;
+        for (const auto& chunk: chunks) {
+            cout << chunk << endl;
+        } 
+        cout << "------------------------------" << endl;
+    }
+}
 
 
 void print_steps(void) {
