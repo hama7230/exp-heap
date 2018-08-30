@@ -30,10 +30,18 @@ class Chunk {
         void* bk;
         void* fd_nextsize;
         void* bk_nextsize;
+        
+        static const size_t SIZE_SZ = sizeof(size_t);
+        static const size_t MALLOC_ALIGN_MASK = 2*SIZE_SZ - 1;
+        static const size_t MINSIZE = 0x20;
+        
+        size_t reqeuset2size(size_t req) {
+            return (((req) + SIZE_SZ + MALLOC_ALIGN_MASK < MINSIZE)  ? MINSIZE : ((req) + SIZE_SZ + MALLOC_ALIGN_MASK) & ~MALLOC_ALIGN_MASK);
+        }
     public:
         Chunk(void* _addr, size_t _size)
             : isUsed(true)
-            , addr(_addr-0x10)
+            , addr((void*)((uint64_t)_addr-0x10))
             , prev_size(0)
             , size(_size)
             , fd(nullptr)
@@ -49,13 +57,24 @@ class Chunk {
         void free(void) {
             cout << "free()..."  << endl;
             isUsed = false;
-            
+             
             
         }
         void reuse(void) {
             isUsed = true;
         }
 };
+// 仮想的なmain arena
+class Arena {
+        
+    public:
+       // Chunk fastbins;
+        Arena() {
+        
+
+        }
+};
+
 
 
 // heapに対する操作を記憶するクラス
@@ -98,7 +117,7 @@ class Step {
                     snprintf(buf, sizeof(buf), "free %p", ptr);
                     break;
                 case REALLOC:
-                    snprintf(buf, sizeof(buf), "realloc %p %zd %zd", ptr,  size);
+                    snprintf(buf, sizeof(buf), "realloc %p %zd", ptr,  size);
                     break;
                 default:
                     break;
@@ -189,8 +208,8 @@ int main(int argc, char* argv[]) {
 
 
 void step_by_step() {
-    for (int i=0; i < steps.size(); i++) {
-        int j = 0;
+    for (size_t i=0; i < steps.size(); i++) {
+        size_t j = 0;
         // vector<void*> chunks;
         vector<Chunk> chunks;
         for (const auto& s : steps) {
@@ -202,6 +221,8 @@ void step_by_step() {
             sort(chunks.begin(), chunks.end(), [](const Chunk a, const Chunk b) {
                 return a.get_addr() < b.get_addr();
             });
+
+
             if (s.get_function() == MALLOC) {
                 //chunks.push_back(s.get_ptr());
                 bool isNewchunk = true;
@@ -228,7 +249,7 @@ void step_by_step() {
                 }
                 bool isExisted = false;
                 for (auto& chunk : chunks) {
-                    void* ptr = chunk.get_addr() + 0x10;
+                    void* ptr = (void*)((uint64_t)chunk.get_addr() + 0x10);
                     if (ptr == s.get_ptr()) {
                         // chunkをfree()後の状態にする．
                         // arenaの更新などなど
@@ -248,7 +269,8 @@ void step_by_step() {
         
         cout << "------------------------------" << endl;
         for (const auto& chunk: chunks) {
-            cout << chunk.get_addr() << "  " << chunk.get_size() << endl;
+            if (!chunk.isFree()) 
+                cout << chunk.get_addr() << "  " << chunk.get_size() << endl;
         } 
         cout << "------------------------------" << endl;
     }
