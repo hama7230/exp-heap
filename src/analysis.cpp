@@ -31,19 +31,23 @@ class Chunk {
         void* fd_nextsize;
         void* bk_nextsize;
         
-        static const size_t SIZE_SZ = sizeof(size_t);
+        //static const size_t SIZE_SZ = sizeof(size_t);
+        static const size_t SIZE_SZ = 8;
         static const size_t MALLOC_ALIGN_MASK = 2*SIZE_SZ - 1;
-        static const size_t MINSIZE = 0x20;
+        static const size_t MIN_CHUNK_SIZE = 0x20; 
+        static const size_t MINSIZE = (unsigned long)(((MIN_CHUNK_SIZE+MALLOC_ALIGN_MASK) & ~MALLOC_ALIGN_MASK));
         
         size_t reqeuset2size(size_t req) {
-            return (((req) + SIZE_SZ + MALLOC_ALIGN_MASK < MINSIZE)  ? MINSIZE : ((req) + SIZE_SZ + MALLOC_ALIGN_MASK) & ~MALLOC_ALIGN_MASK);
+            size_t result = (((req) + SIZE_SZ + MALLOC_ALIGN_MASK < MINSIZE)  ? MINSIZE : ((req) + SIZE_SZ + MALLOC_ALIGN_MASK) & ~MALLOC_ALIGN_MASK);
+            return result;
+            //return (((req) + SIZE_SZ + MALLOC_ALIGN_MASK < MINSIZE)  ? MINSIZE : ((req) + SIZE_SZ + MALLOC_ALIGN_MASK) & ~MALLOC_ALIGN_MASK);
         }
     public:
         Chunk(void* _addr, size_t _size)
             : isUsed(true)
             , addr((void*)((uint64_t)_addr-0x10))
             , prev_size(0)
-            , size(_size)
+            , size(reqeuset2size(_size))
             , fd(nullptr)
             , bk(nullptr)
             , fd_nextsize(nullptr)
@@ -95,12 +99,7 @@ class Step {
         {
         }
         void* get_ptr() const { return ptr; }
-        size_t get_size() const { 
-            if (nmemb == NOT_USED)
-                return size;
-            else
-                return size*nmemb;
-        }
+        size_t get_size() const { return size; }
         size_t get_nmemb() const { return nmemb; }
         int get_function() const { return function; }
         
@@ -148,7 +147,7 @@ int main(int argc, char* argv[]) {
         size_t nmemb, size;
         if (buf.find("called") != string::npos) {
             if (buf.find("malloc") != string::npos) {
-                ifs >> size >> ptr;
+                ifs >>  size >> ptr;
                 steps.emplace_back(MALLOC, ptr, size, NOT_USED);
             }
             if (buf.find("calloc") != string::npos) {
@@ -226,16 +225,19 @@ void step_by_step() {
             if (s.get_function() == MALLOC) {
                 //chunks.push_back(s.get_ptr());
                 bool isNewchunk = true;
+                size_t realsize;
                 for (auto& chunk : chunks) {
                     // just-fit
-                    if (chunk.isFree() && chunk.get_size() == s.get_size()) {
+                    realsize = s.get_nmemb() == NOT_USED ? s.get_size() : s.get_size()*s.get_nmemb();
+                    if (chunk.isFree() && chunk.get_size() == realsize) {
                          chunk.reuse();
                          isNewchunk = false;
                          break;
                     }
                 }
                 if (isNewchunk)
-                    chunks.emplace_back(s.get_ptr(), s.get_size());
+                    chunks.emplace_back(s.get_ptr(), realsize);
+            
             } else if (s.get_function() == REALLOC) {
             } else if (s.get_function() == FREE) {
                 /*
@@ -270,7 +272,7 @@ void step_by_step() {
         cout << "------------------------------" << endl;
         for (const auto& chunk: chunks) {
             if (!chunk.isFree()) 
-                cout << chunk.get_addr() << "  " << chunk.get_size() << endl;
+                printf("%lx:%lx\n", (uint64_t)chunk.get_addr(),  (uint64_t)chunk.get_size());
         } 
         cout << "------------------------------" << endl;
     }
