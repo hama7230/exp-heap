@@ -5,6 +5,8 @@
 #include <memory>
 
 
+#define NOT_USED    0xdeadbeeffeedbabe
+
 enum function{MALLOC, FREE, REALLOC};
 using namespace std;
 
@@ -74,7 +76,12 @@ class Step {
         {
         }
         void* get_ptr() const { return ptr; }
-        size_t get_size() const { return size;}
+        size_t get_size() const { 
+            if (nmemb == NOT_USED)
+                return size;
+            else
+                return size*nmemb;
+        }
         size_t get_nmemb() const { return nmemb; }
         int get_function() const { return function; }
         
@@ -82,13 +89,16 @@ class Step {
             char buf[0x100];
             switch(function) {
                 case MALLOC:
-                    snprintf(buf, sizeof(buf), "malloc %p %zd", ptr, size);
+                    if (nmemb == NOT_USED) 
+                        snprintf(buf, sizeof(buf), "malloc %p %zd", ptr, size);
+                    else
+                        snprintf(buf, sizeof(buf), "calloc %p %zd", ptr, size*nmemb);
                     break;
                 case FREE:
                     snprintf(buf, sizeof(buf), "free %p", ptr);
                     break;
                 case REALLOC:
-                    snprintf(buf, sizeof(buf), "realloc %p %zd %zd", ptr, nmemb, size);
+                    snprintf(buf, sizeof(buf), "realloc %p %zd %zd", ptr,  size);
                     break;
                 default:
                     break;
@@ -120,15 +130,19 @@ int main(int argc, char* argv[]) {
         if (buf.find("called") != string::npos) {
             if (buf.find("malloc") != string::npos) {
                 ifs >> size >> ptr;
-                steps.emplace_back(MALLOC, ptr, size, 0xdeadbeef);
+                steps.emplace_back(MALLOC, ptr, size, NOT_USED);
+            }
+            if (buf.find("calloc") != string::npos) {
+                ifs >> size >> nmemb >> ptr;
+                steps.emplace_back(MALLOC, ptr, size, nmemb);
             }
             if (buf.find("free") != string::npos) {
                 ifs >> ptr; 
-                steps.emplace_back(FREE, ptr, 0xdeadbeef, 0xdeadbeef);
+                steps.emplace_back(FREE, ptr, NOT_USED, NOT_USED);
             }
-            if (buf.find("calloc") != string::npos) {
+            if (buf.find("realloc") != string::npos) {
                 ifs >> nmemb >> size >> ptr;
-                steps.emplace_back(REALLOC, ptr, size, nmemb);
+                steps.emplace_back(REALLOC, ptr, size, NOT_USED);
             }
            
         }
@@ -185,7 +199,9 @@ void step_by_step() {
             j++;
             
             // addrでsort
-            
+            sort(chunks.begin(), chunks.end(), [](const Chunk a, const Chunk b) {
+                return a.get_addr() < b.get_addr();
+            });
             if (s.get_function() == MALLOC) {
                 //chunks.push_back(s.get_ptr());
                 bool isNewchunk = true;
@@ -214,7 +230,6 @@ void step_by_step() {
                 for (auto& chunk : chunks) {
                     void* ptr = chunk.get_addr() + 0x10;
                     if (ptr == s.get_ptr()) {
-                        
                         // chunkをfree()後の状態にする．
                         // arenaの更新などなど
                         chunk.free();
@@ -233,8 +248,7 @@ void step_by_step() {
         
         cout << "------------------------------" << endl;
         for (const auto& chunk: chunks) {
-            cout << chunk.get_addr() << endl;
-            cout << chunk.get_size() << endl;
+            cout << chunk.get_addr() << "  " << chunk.get_size() << endl;
         } 
         cout << "------------------------------" << endl;
     }
