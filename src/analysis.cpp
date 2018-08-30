@@ -31,16 +31,16 @@ class Chunk {
         void* fd_nextsize;
         void* bk_nextsize;
         
-        //static const size_t SIZE_SZ = sizeof(size_t);
-        static const size_t SIZE_SZ = 8;
+        static const size_t SIZE_SZ = sizeof(size_t);
         static const size_t MALLOC_ALIGN_MASK = 2*SIZE_SZ - 1;
         static const size_t MIN_CHUNK_SIZE = 0x20; 
         static const size_t MINSIZE = (unsigned long)(((MIN_CHUNK_SIZE+MALLOC_ALIGN_MASK) & ~MALLOC_ALIGN_MASK));
         
+        static const size_t global_max_fast = 0x80;
+
         size_t reqeuset2size(size_t req) {
             size_t result = (((req) + SIZE_SZ + MALLOC_ALIGN_MASK < MINSIZE)  ? MINSIZE : ((req) + SIZE_SZ + MALLOC_ALIGN_MASK) & ~MALLOC_ALIGN_MASK);
             return result;
-            //return (((req) + SIZE_SZ + MALLOC_ALIGN_MASK < MINSIZE)  ? MINSIZE : ((req) + SIZE_SZ + MALLOC_ALIGN_MASK) & ~MALLOC_ALIGN_MASK);
         }
     public:
         Chunk(void* _addr, size_t _size)
@@ -61,7 +61,13 @@ class Chunk {
         void free(void) {
             cout << "free()..."  << endl;
             isUsed = false;
-             
+            
+            // for fastbin
+            if (size <= global_max_fast) {
+                uint32_t idx_fb = (size - MIN_CHUNK_SIZE) / 0x10;
+                fd = nullptr; // fastbinにchunkがある場合は，linked listにする
+                bk = nullptr;
+            }
             
         }
         void reuse(void) {
@@ -72,7 +78,10 @@ class Chunk {
 class Arena {
         
     public:
-       // Chunk fastbins;
+       // Chunk fastbins[7];
+       // Chunk unsortedbin;
+       // Chunk smallbins[127];
+       // Chunk largebins[127];
         Arena() {
         
 
