@@ -147,19 +147,19 @@ int main(int argc, char* argv[]) {
         size_t nmemb, size;
         if (buf.find("called") != string::npos) {
             if (buf.find("malloc") != string::npos) {
-                ifs >>  size >> ptr;
+                ifs >> hex >> size >> ptr;
                 steps.emplace_back(MALLOC, ptr, size, NOT_USED);
             }
             if (buf.find("calloc") != string::npos) {
-                ifs >> size >> nmemb >> ptr;
+                ifs >> hex >> size >> nmemb >> ptr;
                 steps.emplace_back(MALLOC, ptr, size, nmemb);
             }
             if (buf.find("free") != string::npos) {
-                ifs >> ptr; 
+                ifs >> hex >> ptr; 
                 steps.emplace_back(FREE, ptr, NOT_USED, NOT_USED);
             }
             if (buf.find("realloc") != string::npos) {
-                ifs >> nmemb >> size >> ptr;
+                ifs >> hex >> nmemb >> size >> ptr;
                 steps.emplace_back(REALLOC, ptr, size, NOT_USED);
             }
            
