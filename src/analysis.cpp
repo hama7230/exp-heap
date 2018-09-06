@@ -136,21 +136,21 @@ class Step {
 vector<Step> steps;
 
 
+class MemoryHistory {
+    std::vector<Step> steps;
+    public:
+       void loadLog(const std::string fileName);
+       void loadDump(const std::string fileName);
+       void printSteps() const;
+       void printStepByStep() const;
+};
+MemoryHistory memoryHistory;
 
-void step_by_step(void);
-void print_steps(void);
 
-int main(int argc, char* argv[]) {
-    if (argc != 2) {
-        cerr << "Usage: filename" << endl;
-        exit(1);
-    }
-    string path = "/tmp/trace_heap/";
-    path = path + argv[1];
-    
+void MemoryHistory::loadLog(const std::string fileName) {
     // load logfile
     string buf;
-    ifstream ifs(path);    
+    ifstream ifs(fileName);    
     while (getline(ifs, buf)) {
         void* ptr;
         size_t nmemb, size;
@@ -171,51 +171,36 @@ int main(int argc, char* argv[]) {
                 ifs >> hex >> nmemb >> size >> ptr;
                 steps.emplace_back(REALLOC, ptr, size, NOT_USED);
             }
-           
         }
     }
-    
-    
+}
+
+void MemoryHistory::loadDump(const std::string fileName) {
     // load memory dump
-    path = path + ".dump";
+    std::string path = fileName + ".dump";
     ifstream ifs_dump(path,  ios::binary);
     if (!ifs_dump) {
         cout << "dump file open error" << endl;
-        return 1;
+        exit(1);
     }
     if (!ifs_dump.is_open()) {
         cout << "dump file open error" << endl;
-        return 1;
+        exit(1);
     }
 
     ifs_dump.seekg(0, ios::end);
     size_t size = ifs_dump.tellg();
     ifs_dump.seekg(0, ios::beg);
     ifs_dump.read((char*)heap.memory, size);
-
-    
-    while(1) {
-        cout << "================================\n1. print steps\n2. print step by step\n3. fugafuga\n" << endl;
-        int choice;
-        cin >> choice;
-        switch (choice) {
-            case 1:
-                print_steps();
-                break;
-            case 2:
-                step_by_step(); 
-                break;
-        }
-    }
-
-
-
-    return 0;
-
 }
 
+void MemoryHistory::printSteps() const {
+    for (const auto& s : steps) {
+        cout << s.toString() << endl;
+    }
+}
 
-void step_by_step() {
+void MemoryHistory::printStepByStep() const {
     for (size_t i=0; i < steps.size(); i++) {
         size_t j = 0;
         // vector<void*> chunks;
@@ -288,11 +273,32 @@ void step_by_step() {
 }
 
 
-void print_steps(void) {
-    for (const auto& s : steps) {
-        cout << s.toString() << endl;
-    }
-}
 
+int main(int argc, char* argv[]) {
+    if (argc != 2) {
+        cerr << "Usage: filename" << endl;
+        exit(1);
+    }
+    string path = "/tmp/trace_heap/";
+    path = path + argv[1];
+    
+    memoryHistory.loadLog(path);
+    memoryHistory.loadDump(path);
+
+    while(1) {
+        cout << "================================\n1. print steps\n2. print step by step\n3. fugafuga\n" << endl;
+        int choice;
+        cin >> choice;
+        switch (choice) {
+            case 1:
+                memoryHistory.printSteps();
+                break;
+            case 2:
+                memoryHistory.printStepByStep();
+                break;
+        }
+    }
+    return 0;
+}
 
 
