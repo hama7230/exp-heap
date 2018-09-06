@@ -11,13 +11,7 @@ enum function{MALLOC, FREE, REALLOC};
 using namespace std;
 
 
-class Mem {
-    public:
-        static const size_t size = 0x21000;
-        unsigned char memory[size];
-};
 
-static Mem heap;
 
 // step-by-stepで解析していくときのchunk情報を持つクラス 
 class Chunk {
@@ -31,6 +25,7 @@ class Chunk {
         void* fd_nextsize;
         void* bk_nextsize;
         
+    public:
         static const size_t SIZE_SZ = sizeof(size_t);
         static const size_t MALLOC_ALIGN_MASK = 2*SIZE_SZ - 1;
         static const size_t MIN_CHUNK_SIZE = 0x20; 
@@ -42,7 +37,6 @@ class Chunk {
             size_t result = (((req) + SIZE_SZ + MALLOC_ALIGN_MASK < MINSIZE)  ? MINSIZE : ((req) + SIZE_SZ + MALLOC_ALIGN_MASK) & ~MALLOC_ALIGN_MASK);
             return result;
         }
-    public:
         Chunk(void* _addr, size_t _size)
             : isUsed(true)
             , addr((void*)((uint64_t)_addr-0x10))
@@ -54,39 +48,32 @@ class Chunk {
             , bk_nextsize(nullptr)
         {
         }
-        
+        Chunk() {
+         
+        } 
         void* get_addr() const { return addr; }
+        void* get_ptr() const { return (void*)((uint64_t)addr + 0x10); }
         size_t get_size() const { return size; }
         bool isFree() const { return !isUsed; }
-        void free(void) {
-            cout << "free()..."  << endl;
-            isUsed = false;
-            
-            // for fastbin
-            if (size <= global_max_fast) {
-                uint32_t idx_fb = (size - MIN_CHUNK_SIZE) / 0x10;
-                fd = nullptr; // fastbinにchunkがある場合は，linked listにする
-                bk = nullptr;
-            }
-            
-        }
-        void reuse(void) {
-            isUsed = true;
-        }
+        void set_fd(void* _fd) { fd = _fd; }
+        void set_isUsed(bool _isUsed) { isUsed = _isUsed; }
 };
 // 仮想的なmain arena
 class Arena {
-        
+    
     public:
-       // Chunk fastbins[7];
-       // Chunk unsortedbin;
-       // Chunk smallbins[127];
-       // Chunk largebins[127];
-        Arena() {
-        
-
-        }
+       Chunk fastbins[7];
+       Chunk unsortedbin;
+       Chunk smallbins[127];
+       Chunk largebins[127];
+       Arena() {
+           for (int i = 0; i < 7; i++) {
+                fastbins[i] = Chunk(nullptr, 0);
+           }
+       }
 };
+
+
 
 
 
@@ -101,7 +88,6 @@ class Step {
     public:
         Step(int _function, void* _ptr, size_t _size, size_t _nmemb)
             : function(_function)
-            , isUsed(true)
             , ptr(_ptr)
             , size(_size)
             , nmemb(_nmemb)
@@ -133,19 +119,22 @@ class Step {
             return buf;
         }
 };
-vector<Step> steps;
 
 
 class MemoryHistory {
     std::vector<Step> steps;
     public:
        void loadLog(const std::string fileName);
-       void loadDump(const std::string fileName);
+       void loadDump(const std::string fileName, char* memory);
        void printSteps() const;
        void printStepByStep() const;
+       std::vector<Step> getSteps() const;
 };
 MemoryHistory memoryHistory;
 
+std::vector<Step> MemoryHistory::getSteps() const {
+    return steps;
+}
 
 void MemoryHistory::loadLog(const std::string fileName) {
     // load logfile
@@ -159,7 +148,7 @@ void MemoryHistory::loadLog(const std::string fileName) {
                 ifs >> hex >> size >> ptr;
                 steps.emplace_back(MALLOC, ptr, size, NOT_USED);
             }
-            if (buf.find("calloc") != string::npos) {
+             if (buf.find("calloc") != string::npos) {
                 ifs >> hex >> size >> nmemb >> ptr;
                 steps.emplace_back(MALLOC, ptr, size, nmemb);
             }
@@ -175,7 +164,7 @@ void MemoryHistory::loadLog(const std::string fileName) {
     }
 }
 
-void MemoryHistory::loadDump(const std::string fileName) {
+void MemoryHistory::loadDump(const std::string fileName, char* memory) {
     // load memory dump
     std::string path = fileName + ".dump";
     ifstream ifs_dump(path,  ios::binary);
@@ -191,7 +180,7 @@ void MemoryHistory::loadDump(const std::string fileName) {
     ifs_dump.seekg(0, ios::end);
     size_t size = ifs_dump.tellg();
     ifs_dump.seekg(0, ios::beg);
-    ifs_dump.read((char*)heap.memory, size);
+    ifs_dump.read((char*)memory, size);
 }
 
 void MemoryHistory::printSteps() const {
@@ -201,77 +190,109 @@ void MemoryHistory::printSteps() const {
 }
 
 void MemoryHistory::printStepByStep() const {
-    for (size_t i=0; i < steps.size(); i++) {
+    for (size_t i = 0; i < steps.size(); i++) {
         size_t j = 0;
-        // vector<void*> chunks;
-        vector<Chunk> chunks;
+        cout << "==================================================" << endl;
         for (const auto& s : steps) {
-            if (i < j) 
+            if (i < j)
                 break;
             j++;
-            
-            // addrでsort
-            sort(chunks.begin(), chunks.end(), [](const Chunk a, const Chunk b) {
-                return a.get_addr() < b.get_addr();
-            });
-
-
-            if (s.get_function() == MALLOC) {
-                //chunks.push_back(s.get_ptr());
-                bool isNewchunk = true;
-                size_t realsize;
-                for (auto& chunk : chunks) {
-                    // just-fit
-                    realsize = s.get_nmemb() == NOT_USED ? s.get_size() : s.get_size()*s.get_nmemb();
-                    if (chunk.isFree() && chunk.get_size() == realsize) {
-                         chunk.reuse();
-                         isNewchunk = false;
-                         break;
-                    }
-                }
-                if (isNewchunk)
-                    chunks.emplace_back(s.get_ptr(), realsize);
-            
-            } else if (s.get_function() == REALLOC) {
-            } else if (s.get_function() == FREE) {
-                /*
-                vector<void*>::iterator it = find(chunks.begin(), chunks.end(), s.get_ptr());
-                if (it == chunks.end()) {
-                    cout << "invalid pointer? or arbitary address free?" << endl;
-                } else {
-                    chunks.erase(it);
-                }*/
-                for (auto it = chunks.begin(); it != chunks.end(); it++) {
-                }
-                bool isExisted = false;
-                for (auto& chunk : chunks) {
-                    void* ptr = (void*)((uint64_t)chunk.get_addr() + 0x10);
-                    if (ptr == s.get_ptr()) {
-                        // chunkをfree()後の状態にする．
-                        // arenaの更新などなど
-                        chunk.free();
-                        isExisted = true;
-                        break;
-                    }
-                }
-                if (!isExisted) {
-                    cout << "invalid pointer? or arbitary address free?" << endl;
-                }
-            } else {
-                cout << "unknown funtion" << endl;
-            }
-            
+            cout << s.toString() << endl;
         }
-        
-        cout << "------------------------------" << endl;
-        for (const auto& chunk: chunks) {
-            if (!chunk.isFree()) 
-                printf("%lx:%lx\n", (uint64_t)chunk.get_addr(),  (uint64_t)chunk.get_size());
-        } 
-        cout << "------------------------------" << endl;
     }
 }
 
+ 
+class Mem {
+    public:
+        static const size_t size = 0x21000;
+        unsigned char memory[size];
+        void free(Chunk ch);
+        void malloc(Chunk ch);
+        void analyzeSteps(MemoryHistory* mh);
+    private:
+        Arena main_arena;
+        std::vector<Chunk> chunks;
+        
+};
+
+static Mem heap;
+
+void Mem::malloc(Chunk ch) {
+    cout << "malloc process" << endl;
+    
+    // fastbinの確認
+    if (ch.get_size() <= Chunk::global_max_fast) {
+        uint32_t idx_fb = (ch.get_size() - Chunk::MIN_CHUNK_SIZE) / 0x10;
+        if (heap.main_arena.fastbins[idx_fb].get_addr() != nullptr  ) {
+            Chunk tmp = heap.main_arena.fastbins[idx_fb];
+            tmp.set_isUsed(true);
+        }
+    }
+
+    // unsortbinの確認
+    
+    // smallbin/largebinの確認
+    
+    // topからチャンクを切り出す.
+    chunks.push_back(ch);
+
+    sort(chunks.begin(), chunks.end(), [](const Chunk a, const Chunk b) {
+            return a.get_addr() < b.get_addr();
+    });
+}
+void Mem::free(Chunk ch) {
+    cout << "free process" << endl;
+    
+    // fastbin 
+    if (ch.get_size() <= Chunk::global_max_fast) {
+        cout << "\tfastbin process" << endl;
+        uint32_t idx_fb = (ch.get_size() - Chunk::MIN_CHUNK_SIZE) / 0x10;
+        if (heap.main_arena.fastbins[idx_fb].get_addr() == nullptr  ) { //  fastbinが空
+            heap.main_arena.fastbins[idx_fb] = ch;
+            ch.set_fd(nullptr);
+        } else {
+            // 既にfastbinにチャンクが存在するのでlinkする
+            Chunk tmp = heap.main_arena.fastbins[idx_fb];
+            heap.main_arena.fastbins[idx_fb] = ch;
+            ch.set_fd(tmp.get_addr());
+        }
+        ch.set_isUsed(false);
+    }
+
+
+}
+void Mem::analyzeSteps(MemoryHistory* mh) {
+    for (auto& s : mh->getSteps()) {
+        cout << s.toString() << endl;
+        switch (s.get_function()) {
+            case MALLOC:
+            {
+                Chunk ch = Chunk(s.get_ptr(), s.get_size());
+                heap.malloc(ch);
+                break;
+            }
+            case FREE:
+            {
+                bool exists = false;
+                for (auto& ch : chunks) {
+                    if (s.get_ptr()  == ch.get_ptr() ) {
+                        heap.free(ch);
+                        exists = true;
+                        break;
+                    }
+                }
+                if (!exists)
+                    cout << "unknown address free" << endl;
+                break;
+            }
+        };
+    }
+    
+    for(auto& c: chunks) {
+        printf("%lx:%lx\n", (uint64_t)c.get_addr(),  (uint64_t)c.get_size());
+    }
+}
 
 
 int main(int argc, char* argv[]) {
@@ -283,10 +304,10 @@ int main(int argc, char* argv[]) {
     path = path + argv[1];
     
     memoryHistory.loadLog(path);
-    memoryHistory.loadDump(path);
-
+    memoryHistory.loadDump(path, (char*)heap.memory);
+    
     while(1) {
-        cout << "================================\n1. print steps\n2. print step by step\n3. fugafuga\n" << endl;
+        cout << "================================\n1. print steps\n2. print step by step\n3. analyze steps\n" << endl;
         int choice;
         cin >> choice;
         switch (choice) {
@@ -296,6 +317,8 @@ int main(int argc, char* argv[]) {
             case 2:
                 memoryHistory.printStepByStep();
                 break;
+            case 3:
+                heap.analyzeSteps(&memoryHistory);
         }
     }
     return 0;
