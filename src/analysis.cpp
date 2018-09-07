@@ -4,14 +4,10 @@
 #include <algorithm>
 #include <memory>
 
-
 #define NOT_USED    0xdeadbeeffeedbabe
 
 enum function{MALLOC, FREE, REALLOC};
 using namespace std;
-
-
-
 
 // step-by-stepで解析していくときのchunk情報を持つクラス 
 class Chunk {
@@ -58,11 +54,15 @@ class Chunk {
         void* get_ptr() const { return (void*)((uint64_t)addr + 0x10); }
         size_t get_size() const { return size; }
         bool isFree() const { return !isUsed; }
-        void set_fd(void* _fd) { fd = _fd; }
+        void set_fd(void* ptr) { fd = ptr; }
+        void set_bk(void* ptr) { bk = ptr; }
         void set_fd_ch(Chunk* ch) { fd_ch = ch; }
+        void set_bk_ch(Chunk* ch) { bk_ch = ch; }
         void set_isUsed(bool _isUsed) { isUsed = _isUsed; }
         Chunk* get_next() const { return fd_ch; }
 };
+
+
 // 仮想的なmain arena
 class Arena {
     
@@ -74,6 +74,11 @@ class Arena {
        void* top;
        size_t top_size;
        void printFastbins() const; 
+       void printUnsortedbin() const; 
+       void printTop() const;
+       
+       static const uint64_t addr_ub = 0xdeadbeefdeadbeef;
+        
 
        Arena() {
            for (int i = 0; i < 7; i++) {
@@ -106,6 +111,18 @@ void Arena::printFastbins() const {
             printf("\n");
         }
     }
+}
+
+
+void Arena::printUnsortedbin() const {
+    cout << "=== Unsortedbin ===" << endl;
+    
+}   
+
+
+void Arena::printTop() const {
+    cout << "=== top ===" << endl;
+    printf("\ttop = %p (size: 0x%lx)\n", top, (uint64_t)top_size);
 }
 
 
@@ -301,19 +318,27 @@ void Mem::free(Chunk& ch) {
         }
         ch.set_isUsed(false);
         cout << "\tinsert fastbin" << endl;
+        return;
     }
 
-
+    
     // smallbin/largebin 
     // prev_inuseの確認(直前がfastbinでなくfreedだったら統合する)
-     
-    
+    //
     // 直下がtopだったらtopの位置とサイズを更新する
     if ((void*)((uint64_t)ch.get_addr() + ch.get_size()) == main_arena.top) {
         main_arena.top = ch.get_addr();
         main_arena.top_size += ch.get_size();
+        return;
     }
+
+    main_arena.unsortedbin = &ch;
+    ch.set_fd((void*)Arena::addr_ub);
+    ch.set_bk((void*)Arena::addr_ub);
+    ch.set_fd_ch((Chunk*)nullptr);
+    ch.set_bk_ch((Chunk*)nullptr);
 }
+
 
 void Mem::printAllChunks() const {
     cout << "=== All Chunks ====" << endl;
@@ -369,6 +394,8 @@ void Mem::analyzeSteps(MemoryHistory* mh) {
     printUsedChunks();
     printFreedChunks();
     main_arena.printFastbins();
+    main_arena.printUnsortedbin();
+    main_arena.printTop();
 }
 
 
