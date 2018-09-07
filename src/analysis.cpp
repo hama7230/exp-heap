@@ -71,15 +71,37 @@ class Arena {
        Chunk* unsortedbin;
        Chunk* smallbins[127];
        Chunk* largebins[127];
+       void printFastbins() const; 
+
        Arena() {
            for (int i = 0; i < 7; i++) {
                 fastbins[i] = nullptr; 
+           }
+           unsortedbin = nullptr;
+           for (int i = 0; i < 127; i++) {
+                smallbins[i] = nullptr; 
+                largebins[i] = nullptr; 
            }
        }
 };
 
 
-
+void Arena::printFastbins() const {
+    cout << "=== Fastbins ===" << endl;
+    for (int i = 0; i < 7; i++) {
+        if (fastbins[i] == nullptr) {
+            printf("\t(0x%x) fastbin[%d] = %p\n", 0x20+i*0x10, i, nullptr);
+        } else {
+            printf("\t(0x%x) fastbin[%d] = %p", 0x20+i*0x10, i, fastbins[i]->get_addr());
+            Chunk* tmp = fastbins[i];
+            while (tmp->get_next() != nullptr) {
+                tmp = tmp->get_next();
+                printf(" => %p", tmp->get_addr());
+            }
+            printf("\n");
+        }
+    }
+}
 
 
 // heapに対する操作を記憶するクラス
@@ -215,6 +237,9 @@ class Mem {
         void free(Chunk& ch);
         void malloc(Chunk& ch);
         void analyzeSteps(MemoryHistory* mh);
+        void printAllChunks() const;
+        void printUsedChunks() const;
+        void printFreedChunks() const;
     private:
         Arena main_arena;
         std::vector<Chunk> chunks;
@@ -260,22 +285,43 @@ void Mem::free(Chunk& ch) {
             heap.main_arena.fastbins[idx_fb] = &ch;
             ch.set_fd(nullptr);
             ch.set_fd_ch(nullptr);
-            cout << "\tadd fastbin" << endl;
         } else {
             // 既にfastbinにチャンクが存在するのでlinkする
             Chunk* tmp = heap.main_arena.fastbins[idx_fb];
             heap.main_arena.fastbins[idx_fb] = &ch;
             ch.set_fd(tmp->get_addr());
             ch.set_fd_ch(tmp);
-            cout << "\tinsert fastbin" << endl;
         }
         ch.set_isUsed(false);
         cout << "\tinsert fastbin" << endl;
         
     }
-
-
 }
+
+void Mem::printAllChunks() const {
+    cout << "=== All Chunks ====" << endl;
+    for (auto& c : chunks) {
+        printf("\t%lx:%lx:%d\n", (uint64_t)c.get_addr(),  (uint64_t)c.get_size(), c.isFree());
+    }
+}
+
+void Mem::printUsedChunks() const {
+    cout << "=== Used Chunks ====" << endl;
+    for(auto& c: chunks) {
+        if (!c.isFree()) 
+            printf("\t%lx:%lx\n", (uint64_t)c.get_addr(),  (uint64_t)c.get_size());
+    }
+}
+
+void Mem::printFreedChunks() const {
+    cout << "=== Freed Chunks ====" << endl;
+    for(auto& c: chunks) {
+        if (c.isFree()) 
+            printf("\t%lx:%lx\n", (uint64_t)c.get_addr(),  (uint64_t)c.get_size());
+    }
+}
+
+
 void Mem::analyzeSteps(MemoryHistory* mh) {
     for (auto& s : mh->getSteps()) {
         cout << s.toString() << endl;
@@ -303,29 +349,9 @@ void Mem::analyzeSteps(MemoryHistory* mh) {
         };
     }
 
-    cout << "used chunks:" << endl;    
-    for(auto& c: chunks) {
-        if (!c.isFree()) 
-            printf("\t%lx:%lx\n", (uint64_t)c.get_addr(),  (uint64_t)c.get_size());
-    }
-    cout << "freed chunks:" << endl;    
-    for(auto& c: chunks) {
-        if (c.isFree()) 
-            printf("\t%lx:%lx\n", (uint64_t)c.get_addr(),  (uint64_t)c.get_size());
-    }
-
-    cout << "fastbin:" << endl;
-    for (int i = 0; i < 7; i++) {
-        if (main_arena.fastbins[i] != nullptr)
-            printf("\t%lx:%lx\n", (uint64_t)main_arena.fastbins[i]->get_addr(),  (uint64_t)main_arena.fastbins[i]->get_size());
-        else 
-            cout << "\tempty bin" << endl;
-    }
-    
-    cout << "all chunks" << endl;
-    for(auto& c: chunks) {
-        printf("\t%lx:%lx:%d\n", (uint64_t)c.get_addr(),  (uint64_t)c.get_size(), c.isFree());
-    }
+    printUsedChunks();
+    printFreedChunks();
+    main_arena.printFastbins();
 }
 
 
@@ -353,6 +379,7 @@ int main(int argc, char* argv[]) {
                 break;
             case 3:
                 heap.analyzeSteps(&memoryHistory);
+                break;
         }
     }
     return 0;
