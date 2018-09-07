@@ -71,6 +71,8 @@ class Arena {
        Chunk* unsortedbin;
        Chunk* smallbins[127];
        Chunk* largebins[127];
+       void* top;
+       size_t top_size;
        void printFastbins() const; 
 
        Arena() {
@@ -82,6 +84,9 @@ class Arena {
                 smallbins[i] = nullptr; 
                 largebins[i] = nullptr; 
            }
+           
+           top = nullptr;
+           top_size = 0x21001;
        }
 };
 
@@ -269,7 +274,8 @@ void Mem::malloc(Chunk& ch) {
     
     // topからチャンクを切り出す.
     chunks.push_back(ch);
-
+    main_arena.top = (void*)((uint64_t)ch.get_addr() + ch.get_size());
+    main_arena.top_size -= ch.get_size();
     sort(chunks.begin(), chunks.end(), [](const Chunk a, const Chunk b) {
             return a.get_addr() < b.get_addr();
     });
