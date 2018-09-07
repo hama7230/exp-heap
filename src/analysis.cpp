@@ -80,8 +80,7 @@ class Arena {
        void printUnsortedbin() const; 
        void printTop() const;
        
-       static const uint64_t addr_ub = 0xdeadbeefdeadbeef;
-        
+       static constexpr void* addr_ub = (void*) 0xdeadbeefdeadbeef;
 
        Arena() {
            for (int i = 0; i < size_fastbins; i++) {
