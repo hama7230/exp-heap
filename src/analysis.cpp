@@ -268,14 +268,15 @@ void Mem::malloc(Chunk& ch) {
         }
     }
 
+    // smallbin/largebinの確認
     // unsortbinの確認
     
-    // smallbin/largebinの確認
     
     // topからチャンクを切り出す.
     chunks.push_back(ch);
     main_arena.top = (void*)((uint64_t)ch.get_addr() + ch.get_size());
     main_arena.top_size -= ch.get_size();
+    
     sort(chunks.begin(), chunks.end(), [](const Chunk a, const Chunk b) {
             return a.get_addr() < b.get_addr();
     });
@@ -300,7 +301,17 @@ void Mem::free(Chunk& ch) {
         }
         ch.set_isUsed(false);
         cout << "\tinsert fastbin" << endl;
-        
+    }
+
+
+    // smallbin/largebin 
+    // prev_inuseの確認(直前がfastbinでなくfreedだったら統合する)
+     
+    
+    // 直下がtopだったらtopの位置とサイズを更新する
+    if ((void*)((uint64_t)ch.get_addr() + ch.get_size()) == main_arena.top) {
+        main_arena.top = ch.get_addr();
+        main_arena.top_size += ch.get_size();
     }
 }
 
