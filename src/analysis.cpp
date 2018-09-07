@@ -67,10 +67,13 @@ class Chunk {
 class Arena {
     
     public:
-       Chunk* fastbins[7];
+       static const int size_fastbins = 7;
+       static const int size_smallbins = 127;
+       static const int size_largebins = 127;
+       std::array<Chunk*, size_fastbins> fastbins;
        Chunk* unsortedbin;
-       Chunk* smallbins[127];
-       Chunk* largebins[127];
+       std::array<Chunk*, size_smallbins> smallbins;
+       std::array<Chunk*, size_largebins> largebins;
        void* top;
        size_t top_size;
        void printFastbins() const; 
@@ -81,11 +84,11 @@ class Arena {
         
 
        Arena() {
-           for (int i = 0; i < 7; i++) {
+           for (int i = 0; i < size_fastbins; i++) {
                 fastbins[i] = nullptr; 
            }
            unsortedbin = nullptr;
-           for (int i = 0; i < 127; i++) {
+           for (int i = 0; i < size_largebins; i++) {
                 smallbins[i] = nullptr; 
                 largebins[i] = nullptr; 
            }
