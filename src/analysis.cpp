@@ -259,9 +259,9 @@ class Mem {
         static const size_t size = 0x21000;
         unsigned char memory[size];
         // void free(Chunk& ch);
-        void free(void* addr);
+        void free(void* ptr);
         // void malloc(Chunk& ch);
-        void malloc(void* addr, size_t size);
+        void malloc(void* ptr, size_t size);
         void analyzeSteps(MemoryHistory* mh);
         void printAllChunks() const;
         void printUsedChunks() const;
@@ -286,7 +286,7 @@ int Mem::find_idx_chunk(void* addr) {
 }
 
 
-void Mem::malloc(void* addr, size_t size) {
+void Mem::malloc(void* ptr, size_t size) {
     cout << "malloc process" << endl;
     
     // fastbinの確認
@@ -307,13 +307,11 @@ void Mem::malloc(void* addr, size_t size) {
     
     
     // topからチャンクを切り出す.
-    chunks.emplace_back(addr, size);
-    main_arena.top = (void*)((uint64_t)addr + size);
+    chunks.emplace_back(ptr, size);
+    main_arena.top = (void*)((uint64_t)ptr + size);
     main_arena.top_size -= size;
      
-    sort(chunks.begin(), chunks.end());//, [](const Chunk& a, const Chunk& b) {
-  //          return a.get_addr() < b.get_addr();
-  //  });
+    sort(chunks.begin(), chunks.end());
 }
 void Mem::free(void* addr) {
     cout << "free process" << endl;
