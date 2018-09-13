@@ -60,6 +60,7 @@ class Chunk {
         void set_bk_ch(Chunk* ch) { bk_ch = ch; }
         void set_isUsed(bool _isUsed) { isUsed = _isUsed; }
         Chunk* get_next() const { return fd_ch; }
+        bool operator<(const Chunk& rhs) const {return addr < rhs.addr;}
 };
 
 
@@ -127,7 +128,6 @@ void Arena::printTop() const {
     printf("\ttop = %p (size: 0x%lx)\n", top, (uint64_t)top_size);
 }
 
-
 // heapに対する操作を記憶するクラス
 class Step {
     private:
@@ -179,11 +179,11 @@ class MemoryHistory {
        void loadDump(const std::string fileName, char* memory);
        void printSteps() const;
        void printStepByStep() const;
-       std::vector<Step> getSteps() const;
+       const std::vector<Step> getSteps() const;
 };
 MemoryHistory memoryHistory;
 
-std::vector<Step> MemoryHistory::getSteps() const {
+const std::vector<Step> MemoryHistory::getSteps() const {
     return steps;
 }
 
@@ -258,31 +258,46 @@ class Mem {
     public:
         static const size_t size = 0x21000;
         unsigned char memory[size];
-        void free(Chunk& ch);
-        void malloc(Chunk& ch);
+        // void free(Chunk& ch);
+        void free(void* addr);
+        // void malloc(Chunk& ch);
+        void malloc(void* addr, size_t size);
         void analyzeSteps(MemoryHistory* mh);
         void printAllChunks() const;
         void printUsedChunks() const;
         void printFreedChunks() const;
+        int find_idx_chunk(void* addr);
     private:
         Arena main_arena;
         std::vector<Chunk> chunks;
         
 };
 
-static Mem heap;
+static Mem mem;
 
-void Mem::malloc(Chunk& ch) {
+int Mem::find_idx_chunk(void* addr) {
+    int idx = 0;
+    for (auto& c : chunks) {
+        if (addr == c.get_addr())
+            return idx;
+        idx++;
+    }
+    return -1;
+}
+
+
+void Mem::malloc(void* addr, size_t size) {
     cout << "malloc process" << endl;
     
     // fastbinの確認
-    if (ch.get_size() <= Chunk::global_max_fast) {
-        uint32_t idx_fb = (ch.get_size() - Chunk::MIN_CHUNK_SIZE) / 0x10;
-        if (heap.main_arena.fastbins[idx_fb] != nullptr  ) {
-            Chunk* tmp = heap.main_arena.fastbins[idx_fb];
-            cout << tmp->get_addr() << endl;
-            tmp->set_isUsed(true);
-            heap.main_arena.fastbins[idx_fb] = tmp->get_next();
+    if (size <= Chunk::global_max_fast) {
+        uint32_t idx_fb = (size - Chunk::MIN_CHUNK_SIZE) / 0x10;
+        Chunk*& pch = mem.main_arena.fastbins[idx_fb];
+        if (pch != nullptr  ) {
+            cout << pch->get_addr() << endl;
+            // chunk reuse 
+            pch->set_isUsed(true);
+            pch = pch->get_next();
             return;
         }
     }
@@ -292,29 +307,34 @@ void Mem::malloc(Chunk& ch) {
     
     
     // topからチャンクを切り出す.
-    chunks.push_back(ch);
-    main_arena.top = (void*)((uint64_t)ch.get_addr() + ch.get_size());
-    main_arena.top_size -= ch.get_size();
-    
-    sort(chunks.begin(), chunks.end(), [](const Chunk a, const Chunk b) {
-            return a.get_addr() < b.get_addr();
-    });
+    chunks.emplace_back(addr, size);
+    main_arena.top = (void*)((uint64_t)addr + size);
+    main_arena.top_size -= size;
+     
+    sort(chunks.begin(), chunks.end());//, [](const Chunk& a, const Chunk& b) {
+  //          return a.get_addr() < b.get_addr();
+  //  });
 }
-void Mem::free(Chunk& ch) {
+void Mem::free(void* addr) {
     cout << "free process" << endl;
-    
+    int idx = find_idx_chunk(addr); 
+    if (idx < 0) {
+        cout << "unknown address" << endl;
+        exit(1);
+    }
+    Chunk ch = chunks[idx];
     // fastbin 
     if (ch.get_size() <= Chunk::global_max_fast) {
         cout << "\tfastbin process" << endl;
         uint32_t idx_fb = (ch.get_size() - Chunk::MIN_CHUNK_SIZE) / 0x10;
-        if (heap.main_arena.fastbins[idx_fb] ==  nullptr  ) { //  fastbinが空
-            heap.main_arena.fastbins[idx_fb] = &ch;
+        if (mem.main_arena.fastbins[idx_fb] ==  nullptr  ) { //  fastbinが空
+            mem.main_arena.fastbins[idx_fb] = &ch;
             ch.set_fd(nullptr);
             ch.set_fd_ch(nullptr);
         } else {
             // 既にfastbinにチャンクが存在するのでlinkする
-            Chunk* tmp = heap.main_arena.fastbins[idx_fb];
-            heap.main_arena.fastbins[idx_fb] = &ch;
+            Chunk* tmp = mem.main_arena.fastbins[idx_fb];
+            mem.main_arena.fastbins[idx_fb] = &ch;
             ch.set_fd(tmp->get_addr());
             ch.set_fd_ch(tmp);
         }
@@ -372,8 +392,7 @@ void Mem::analyzeSteps(MemoryHistory* mh) {
         switch (s.get_function()) {
             case MALLOC:
             {
-                Chunk ch = Chunk(s.get_ptr(), s.get_size());
-                heap.malloc(ch);
+                mem.malloc(s.get_ptr(), s.get_size());
                 break;
             }
             case FREE:
@@ -381,7 +400,7 @@ void Mem::analyzeSteps(MemoryHistory* mh) {
                 bool exists = false;
                 for (auto& ch : chunks) {
                     if (s.get_ptr()  == ch.get_ptr() ) {
-                        heap.free(ch);
+                        mem.free(s.get_ptr());
                         exists = true;
                         break;
                     }
@@ -410,7 +429,7 @@ int main(int argc, char* argv[]) {
     path = path + argv[1];
     
     memoryHistory.loadLog(path);
-    memoryHistory.loadDump(path, (char*)heap.memory);
+    memoryHistory.loadDump(path, (char*)mem.memory);
     
     while(1) {
         cout << "================================\n1. print steps\n2. print step by step\n3. analyze steps\n" << endl;
@@ -424,11 +443,9 @@ int main(int argc, char* argv[]) {
                 memoryHistory.printStepByStep();
                 break;
             case 3:
-                heap.analyzeSteps(&memoryHistory);
+                mem.analyzeSteps(&memoryHistory);
                 break;
         }
     }
     return 0;
 }
-
-
