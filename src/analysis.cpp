@@ -315,7 +315,11 @@ void Mem::malloc(void* ptr, size_t size) {
     // smallbin/largebinの確認
     // unsortbinの確認
     if (main_arena.unsortedbin != nullptr) {
-        cout << "hoge" << endl;
+        printf("\tub = %p\n", main_arena.unsortedbin->get_addr());
+        Chunk*& ub = main_arena.unsortedbin;
+        
+
+        
     } 
     
     // topからチャンクを切り出す.
@@ -380,6 +384,7 @@ void Mem::free(void* addr) {
             void* fd = tmp->get_fd();
             if (fd == (void*)Arena::addr_ub) 
                 break;
+            tmp = tmp->get_next();
         }
         ch.set_fd((void*)Arena::addr_ub);
         ch.set_bk((void*)tmp->get_addr());
