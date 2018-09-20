@@ -314,7 +314,9 @@ void Mem::malloc(void* ptr, size_t size) {
 
     // smallbin/largebinの確認
     // unsortbinの確認
-    
+    if (main_arena.unsortedbin != nullptr) {
+        cout << "hoge" << endl;
+    } 
     
     // topからチャンクを切り出す.
     chunks.emplace_back(ptr, size);
@@ -375,7 +377,6 @@ void Mem::free(void* addr) {
         // unsortedbinに繋がるチャンクの最終を探す
         Chunk*& tmp = main_arena.unsortedbin;
         while (true) {
-            void* bk = tmp->get_bk();
             void* fd = tmp->get_fd();
             if (fd == (void*)Arena::addr_ub) 
                 break;
