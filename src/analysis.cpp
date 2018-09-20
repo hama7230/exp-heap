@@ -54,12 +54,15 @@ class Chunk {
         void* get_ptr() const { return (void*)((uint64_t)addr + 0x10); }
         size_t get_size() const { return size; }
         bool isFree() const { return !isUsed; }
+        void* get_fd() const { return fd;}
+        void* get_bk() const { return bk;}
         void set_fd(void* ptr) { fd = ptr; }
         void set_bk(void* ptr) { bk = ptr; }
         void set_fd_ch(Chunk* ch) { fd_ch = ch; }
         void set_bk_ch(Chunk* ch) { bk_ch = ch; }
         void set_isUsed(bool _isUsed) { isUsed = _isUsed; }
         Chunk* get_next() const { return fd_ch; }
+        Chunk* get_prev() const { return bk_ch; }
         bool operator<(const Chunk& rhs) const {return addr < rhs.addr;}
 };
 
@@ -119,7 +122,12 @@ void Arena::printFastbins() const {
 
 void Arena::printUnsortedbin() const {
     cout << "=== Unsortedbin ===" << endl;
-    
+    Chunk* current = unsortedbin;
+    int idx = 0;
+        printf("\t[%02d] %p \n", idx, current->get_addr());
+        current = current->get_next();
+        idx++;
+        printf("\t[%02d] %p \n", idx, current->get_addr());
 }   
 
 
@@ -292,11 +300,8 @@ void Mem::malloc(void* ptr, size_t size) {
     // fastbinの確認
     if (size <= Chunk::global_max_fast) {
         uint32_t idx_fb = (Chunk::reqeuset2size(size) - Chunk::MIN_CHUNK_SIZE) / 0x10;
-        printf("size = %d, idx = %d\n", Chunk::reqeuset2size(size), idx_fb);
         Chunk*& pch = mem.main_arena.fastbins[idx_fb];
-        printf("pch = %p \n", pch);
         if (pch != nullptr  ) {
-            cout << pch->get_addr() << endl;
             // chunk reuse 
             pch->set_isUsed(true);
             pch = pch->get_next();
@@ -326,7 +331,6 @@ void Mem::free(void* addr) {
     // fastbin 
     if (ch.get_size() <= Chunk::global_max_fast) {
         cout << "\tfastbin process" << endl;
-        printf("\tch = %p\n", &ch);
         uint32_t idx_fb = (ch.get_size() - Chunk::MIN_CHUNK_SIZE) / 0x10;
         if (mem.main_arena.fastbins[idx_fb] ==  nullptr  ) { //  fastbinが空
             mem.main_arena.fastbins[idx_fb] = &ch;
@@ -355,11 +359,40 @@ void Mem::free(void* addr) {
         return;
     }
 
-    main_arena.unsortedbin = &ch;
-    ch.set_fd((void*)Arena::addr_ub);
-    ch.set_bk((void*)Arena::addr_ub);
-    ch.set_fd_ch((Chunk*)nullptr);
-    ch.set_bk_ch((Chunk*)nullptr);
+    if (main_arena.unsortedbin == nullptr) {
+        main_arena.unsortedbin = &ch;
+        ch.set_isUsed(false);
+        ch.set_fd((void*)Arena::addr_ub);
+        ch.set_bk((void*)Arena::addr_ub);
+        ch.set_fd_ch((Chunk*)&ch);
+        ch.set_bk_ch((Chunk*)&ch);
+    } else {
+        ch.set_isUsed(false);
+        
+        // unsortedbinに繋がるチャンクの最終を探す
+        Chunk*& tmp = main_arena.unsortedbin;
+        while (true) {
+            void* bk = tmp->get_bk();
+            void* fd = tmp->get_fd();
+            printf("\tfd = %p, bk = %p\n", fd, bk);
+            if (fd == (void*)Arena::addr_ub) 
+                break;
+        }
+        printf("\ttail of unsortedbin = %p\n", tmp->get_addr());
+        printf("\tch = %p\n", ch.get_addr());
+        printf("\ttmp = %p\n", tmp->get_addr());
+        ch.set_fd((void*)Arena::addr_ub);
+        ch.set_bk((void*)tmp->get_addr());
+        ch.set_fd_ch((Chunk*)tmp);
+        ch.set_bk_ch((Chunk*)&ch);
+        tmp->set_fd((void*)tmp->get_addr());
+        tmp->set_bk((void*)Arena::addr_ub);
+        tmp->set_fd_ch((Chunk*)&ch);
+        tmp->set_bk_ch((Chunk*)tmp);
+        main_arena.unsortedbin = &ch;
+        return;
+    }
+
 }
 
 
@@ -404,12 +437,11 @@ void Mem::analyzeSteps(MemoryHistory* mh) {
                 break;
             }
         };
-        printUsedChunks();
-        printFreedChunks();
-        main_arena.printFastbins();
 
     }
 
+    printUsedChunks();
+    printFreedChunks();
     main_arena.printFastbins();
     main_arena.printUnsortedbin();
     main_arena.printTop();
