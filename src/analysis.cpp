@@ -124,10 +124,13 @@ void Arena::printUnsortedbin() const {
     cout << "=== Unsortedbin ===" << endl;
     Chunk* current = unsortedbin;
     int idx = 0;
+    while (true) {
         printf("\t[%02d] %p \n", idx, current->get_addr());
         current = current->get_next();
         idx++;
-        printf("\t[%02d] %p \n", idx, current->get_addr());
+        if (current == unsortedbin) 
+            break;
+    } 
 }   
 
 
@@ -374,13 +377,9 @@ void Mem::free(void* addr) {
         while (true) {
             void* bk = tmp->get_bk();
             void* fd = tmp->get_fd();
-            printf("\tfd = %p, bk = %p\n", fd, bk);
             if (fd == (void*)Arena::addr_ub) 
                 break;
         }
-        printf("\ttail of unsortedbin = %p\n", tmp->get_addr());
-        printf("\tch = %p\n", ch.get_addr());
-        printf("\ttmp = %p\n", tmp->get_addr());
         ch.set_fd((void*)Arena::addr_ub);
         ch.set_bk((void*)tmp->get_addr());
         ch.set_fd_ch((Chunk*)tmp);
