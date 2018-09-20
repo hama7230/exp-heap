@@ -30,7 +30,7 @@ class Chunk {
         
         static const size_t global_max_fast = 0x80;
 
-        size_t reqeuset2size(size_t req) {
+        static size_t reqeuset2size(size_t req) {
             size_t result = (((req) + SIZE_SZ + MALLOC_ALIGN_MASK < MINSIZE)  ? MINSIZE : ((req) + SIZE_SZ + MALLOC_ALIGN_MASK) & ~MALLOC_ALIGN_MASK);
             return result;
         }
@@ -278,7 +278,7 @@ static Mem mem;
 int Mem::find_idx_chunk(void* addr) {
     int idx = 0;
     for (auto& c : chunks) {
-        if (addr == c.get_addr())
+        if (addr == c.get_ptr())
             return idx;
         idx++;
     }
@@ -291,8 +291,10 @@ void Mem::malloc(void* ptr, size_t size) {
     
     // fastbinの確認
     if (size <= Chunk::global_max_fast) {
-        uint32_t idx_fb = (size - Chunk::MIN_CHUNK_SIZE) / 0x10;
+        uint32_t idx_fb = (Chunk::reqeuset2size(size) - Chunk::MIN_CHUNK_SIZE) / 0x10;
+        printf("size = %d, idx = %d\n", Chunk::reqeuset2size(size), idx_fb);
         Chunk*& pch = mem.main_arena.fastbins[idx_fb];
+        printf("pch = %p \n", pch);
         if (pch != nullptr  ) {
             cout << pch->get_addr() << endl;
             // chunk reuse 
@@ -320,10 +322,11 @@ void Mem::free(void* addr) {
         cout << "unknown address" << endl;
         exit(1);
     }
-    Chunk ch = chunks[idx];
+    Chunk& ch = chunks[idx];
     // fastbin 
     if (ch.get_size() <= Chunk::global_max_fast) {
         cout << "\tfastbin process" << endl;
+        printf("\tch = %p\n", &ch);
         uint32_t idx_fb = (ch.get_size() - Chunk::MIN_CHUNK_SIZE) / 0x10;
         if (mem.main_arena.fastbins[idx_fb] ==  nullptr  ) { //  fastbinが空
             mem.main_arena.fastbins[idx_fb] = &ch;
@@ -373,6 +376,7 @@ void Mem::printUsedChunks() const {
         if (!c.isFree()) 
             printf("\t%lx:%lx\n", (uint64_t)c.get_addr(),  (uint64_t)c.get_size());
     }
+    cout << "====================" << endl;
 }
 
 void Mem::printFreedChunks() const {
@@ -381,6 +385,7 @@ void Mem::printFreedChunks() const {
         if (c.isFree()) 
             printf("\t%lx:%lx\n", (uint64_t)c.get_addr(),  (uint64_t)c.get_size());
     }
+    cout << "=====================" << endl;
 }
 
 
@@ -395,23 +400,16 @@ void Mem::analyzeSteps(MemoryHistory* mh) {
             }
             case FREE:
             {
-                bool exists = false;
-                for (auto& ch : chunks) {
-                    if (s.get_ptr()  == ch.get_ptr() ) {
-                        mem.free(s.get_ptr());
-                        exists = true;
-                        break;
-                    }
-                }
-                if (!exists)
-                    cout << "unknown address free" << endl;
+                mem.free(s.get_ptr());
                 break;
             }
         };
+        printUsedChunks();
+        printFreedChunks();
+        main_arena.printFastbins();
+
     }
 
-    printUsedChunks();
-    printFreedChunks();
     main_arena.printFastbins();
     main_arena.printUnsortedbin();
     main_arena.printTop();
