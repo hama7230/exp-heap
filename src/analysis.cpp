@@ -125,7 +125,7 @@ void Arena::printUnsortedbin() const {
     Chunk* current = unsortedbin;
     int idx = 0;
     while (true) {
-        printf("\t[%02d] %p \n", idx, current->get_addr());
+        printf("\t[%02d] %p fd: %p bk: %p\n", idx, current->get_addr(), current->get_fd(), current->get_bk());
         current = current->get_next();
         idx++;
         if (current == unsortedbin) 
@@ -298,8 +298,6 @@ int Mem::find_idx_chunk(void* addr) {
 
 
 void Mem::malloc(void* ptr, size_t size) {
-    cout << "malloc process" << endl;
-    
     // fastbinの確認
     if (size <= Chunk::global_max_fast) {
         uint32_t idx_fb = (Chunk::reqeuset2size(size) - Chunk::MIN_CHUNK_SIZE) / 0x10;
@@ -316,7 +314,9 @@ void Mem::malloc(void* ptr, size_t size) {
     // unsortbinの確認
     if (main_arena.unsortedbin != nullptr) {
         printf("\tub = %p\n", main_arena.unsortedbin->get_addr());
-        Chunk*& ub = main_arena.unsortedbin;
+        Chunk* ub = main_arena.unsortedbin->get_prev();
+        
+        printf("\ttarget ub = %p\n", ub->get_addr());
         
 
         
@@ -330,7 +330,6 @@ void Mem::malloc(void* ptr, size_t size) {
     sort(chunks.begin(), chunks.end());
 }
 void Mem::free(void* addr) {
-    cout << "free process" << endl;
     int idx = find_idx_chunk(addr); 
     if (idx < 0) {
         cout << "unknown address" << endl;
@@ -339,7 +338,6 @@ void Mem::free(void* addr) {
     Chunk& ch = chunks[idx];
     // fastbin 
     if (ch.get_size() <= Chunk::global_max_fast) {
-        cout << "\tfastbin process" << endl;
         uint32_t idx_fb = (ch.get_size() - Chunk::MIN_CHUNK_SIZE) / 0x10;
         if (mem.main_arena.fastbins[idx_fb] ==  nullptr  ) { //  fastbinが空
             mem.main_arena.fastbins[idx_fb] = &ch;
@@ -377,7 +375,6 @@ void Mem::free(void* addr) {
         ch.set_bk_ch((Chunk*)&ch);
     } else {
         ch.set_isUsed(false);
-        
         // unsortedbinに繋がるチャンクの最終を探す
         Chunk*& tmp = main_arena.unsortedbin;
         while (true) {
@@ -386,12 +383,15 @@ void Mem::free(void* addr) {
                 break;
             tmp = tmp->get_next();
         }
-        ch.set_fd((void*)Arena::addr_ub);
-        ch.set_bk((void*)tmp->get_addr());
+        cout << tmp->get_addr() << endl;
+        // ch.set_fd((void*)Arena::addr_ub);
+        ch.set_fd((void*)tmp->get_addr());
+        // ch.set_bk((void*)tmp->get_addr());
+        ch.set_bk((void*)Arena::addr_ub);
         ch.set_fd_ch((Chunk*)tmp);
         ch.set_bk_ch((Chunk*)&ch);
-        tmp->set_fd((void*)tmp->get_addr());
-        tmp->set_bk((void*)Arena::addr_ub);
+        tmp->set_fd((void*)Arena::addr_ub);
+        tmp->set_bk((void*)tmp->get_addr());
         tmp->set_fd_ch((Chunk*)&ch);
         tmp->set_bk_ch((Chunk*)tmp);
         main_arena.unsortedbin = &ch;
