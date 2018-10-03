@@ -332,6 +332,7 @@ void Mem::malloc(void* ptr, size_t size) {
         // chunkの分割処理
         // サイズが同じなら，そのまま
         if (ub->get_size() == Chunk::reqeuset2size(size)) {
+            cout << "just size found!" << endl;
             ub->set_isUsed(true);
             // unlink処理 
             Chunk* prev = ub->get_prev();
@@ -344,7 +345,7 @@ void Mem::malloc(void* ptr, size_t size) {
             ub->set_isUsed(true); 
         }
 
-        
+        return ; 
     } 
     
     // topからチャンクを切り出す.
