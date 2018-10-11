@@ -326,9 +326,16 @@ void Mem::malloc(void* ptr, size_t size) {
     // unsortbinの確認
     if (main_arena.unsortedbin != nullptr) {
         printf("\tub = %p\n", main_arena.unsortedbin->get_addr());
-        //Chunk*& ub = main_arena.unsortedbin->get_prev();
-        Chunk*& ub = main_arena.unsortedbin;
-        ub = ub->get_prev(); 
+        Chunk* ub;
+        Chunk* tmp = main_arena.unsortedbin->get_next();
+        while (true) {
+            printf("\ttmp = %p\n", tmp->get_addr());
+            void* fd = tmp->get_fd();
+            if (fd == (void*)Arena::addr_ub) 
+                break;
+            tmp = tmp->get_next();
+        }
+        ub = tmp;
         printf("\ttarget ub = %p\n", ub->get_addr());
         
         // chunkの分割処理
@@ -492,18 +499,13 @@ void Chunk::splitChunk(size_t new_size) {
     void* new_addr = (void*)((uint64_t)addr + remain);
     printf("splitChunk: new_addr:0x%x new_size = %x\n", new_addr, new_size);
     size = remain;
-    Chunk* new_chunk = new Chunk(new_addr, new_size-0x10);
-    new_chunk->set_fd(fd);
-    new_chunk->set_bk(bk);
-    new_chunk->set_fd_ch(fd_ch);
-    new_chunk->set_bk_ch(bk_ch);
     
-    Chunk* prev = bk_ch;
-    Chunk* next = fd_ch;
-    prev->set_fd(new_addr);
-    next->set_bk(new_addr);
-    prev->set_fd_ch(new_chunk);
-    next->set_bk_ch(new_chunk);
+    Chunk* new_chunk = new Chunk(new_addr+0x10, new_size-0x10);
+    new_chunk->set_fd(Arena::addr_ub);
+    new_chunk->set_bk(Arena::addr_ub);
+    new_chunk->set_fd_ch(new_chunk);
+    new_chunk->set_bk_ch(new_chunk);
+    mem.main_arena.unsortedbin = new_chunk;
     new_chunk->set_isUsed(false);
     mem.chunks.push_back(*new_chunk);
 }
