@@ -83,11 +83,14 @@ class Arena {
        size_t top_size;
        void printFastbins() const; 
        void printUnsortedbin() const; 
+       void printSmallbins() const; 
        void printTop() const;
+       
+       void insertSmallbins(Chunk* chunk);
+       void insertLargebins(Chunk* chunk); 
        
        void unsorted2bins(void* excluded);
        static constexpr void* addr_ub = (void*) 0xdeadbeefdeadbeef;
-
        Arena() {
            for (int i = 0; i < size_fastbins; i++) {
                 fastbins[i] = nullptr; 
@@ -102,6 +105,51 @@ class Arena {
            top_size = 0x21001;
        }
 };
+
+void Arena::insertSmallbins(Chunk* chunk) {
+    int idx = (chunk->get_size() - 0x20) / 0x10;
+    if (smallbins[idx] != nullptr) {
+        Chunk *tmp = smallbins[idx];
+        while (true) {
+            if (tmp->get_fd() == Arena::addr_ub)
+                break;
+            tmp = tmp->get_next();
+        }
+        tmp->set_fd(chunk->get_addr());
+        tmp->set_fd_ch(chunk);
+        chunk->set_bk(tmp->get_addr());
+        chunk->set_bk_ch(tmp);
+    } else { 
+        smallbins[idx] = chunk;
+        chunk->set_fd(Arena::addr_ub);
+        chunk->set_bk(Arena::addr_ub);
+        chunk->set_fd_ch(chunk);
+        chunk->set_bk_ch(chunk);
+    }
+
+}
+
+void Arena::insertLargebins(Chunk* chunk) {
+    int idx = (chunk->get_size() - 0x20) / 0x10;
+    if (largebins[idx] != nullptr) {
+        Chunk *tmp = largebins[idx];
+        while (true) {
+            if (tmp->get_fd() == Arena::addr_ub)
+                break;
+            tmp = tmp->get_next();
+        }
+        tmp->set_fd(chunk->get_addr());
+        tmp->set_fd_ch(chunk);
+        chunk->set_bk(tmp->get_addr());
+        chunk->set_bk_ch(tmp);
+    } else { 
+        largebins[idx] = chunk;
+        chunk->set_fd(Arena::addr_ub);
+        chunk->set_bk(Arena::addr_ub);
+        chunk->set_fd_ch(chunk);
+        chunk->set_bk_ch(chunk);
+    }
+}
 
 void Arena::unsorted2bins(void* excluded) {
     Chunk* chunk = unsortedbin;
@@ -144,6 +192,16 @@ void Arena::printUnsortedbin() const {
             break;
     } 
 }   
+
+void Arena::printSmallbins() const {
+    cout << "=== Smallbins ===" << endl;
+    for (int i=0; i<size_smallbins; i++) {
+        if (smallbins[i] != nullptr) {
+            printf("\t[%02d] %p fd: %p bk: %p\n", i, smallbins[i]->get_addr(), smallbins[i]->get_fd(), smallbins[i]->get_bk());
+        }
+    }
+}
+
 
 
 void Arena::printTop() const {
@@ -327,7 +385,7 @@ void Mem::malloc(void* ptr, size_t size) {
     if (main_arena.unsortedbin != nullptr) {
         printf("\tub = %p\n", main_arena.unsortedbin->get_addr());
         Chunk* ub;
-        Chunk* tmp = main_arena.unsortedbin->get_next();
+        Chunk* tmp = main_arena.unsortedbin;
         while (true) {
             printf("\ttmp = %p\n", tmp->get_addr());
             void* fd = tmp->get_fd();
@@ -349,8 +407,24 @@ void Mem::malloc(void* ptr, size_t size) {
             prev->set_fd(next->get_fd());
             next->set_bk(prev->get_bk());
         } else {
-            //
             main_arena.printUnsortedbin();
+            tmp = main_arena.unsortedbin;
+            while (true) {
+            printf("\ttmp = %p\n", tmp->get_addr());
+                void* fd = tmp->get_fd();
+                if (fd == (void*)Arena::addr_ub) 
+                    break;
+                if (tmp != ub) {
+                    if (tmp->get_size() < 0x400) {
+                        // smallbin
+                        main_arena.insertSmallbins(tmp);
+                    } else {
+                        // largebin
+                        main_arena.insertLargebins(tmp);
+                    }
+                }
+                tmp = tmp->get_next();
+            }
             ub->set_isUsed(true); 
             ub->splitChunk(ub->get_size() - Chunk::reqeuset2size(size));
             printf("%x:%x\n", ub->get_addr(), ub->get_size()); 
@@ -490,7 +564,7 @@ void Mem::analyzeSteps(MemoryHistory* mh) {
     main_arena.printFastbins();
     main_arena.printUnsortedbin();
     main_arena.printTop();
-    printAllChunks();
+    main_arena.printSmallbins();
 }
 
 
