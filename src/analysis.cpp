@@ -56,6 +56,7 @@ class Chunk {
         bool isFree() const { return !isUsed; }
         void* get_fd() const { return fd;}
         void* get_bk() const { return bk;}
+        void set_size(size_t s) { size = s; }
         void set_fd(void* ptr) { fd = ptr; }
         void set_bk(void* ptr) { bk = ptr; }
         void set_fd_ch(Chunk* ch) { fd_ch = ch; }
@@ -88,7 +89,8 @@ class Arena {
        
        void insertSmallbins(Chunk* chunk);
        void insertLargebins(Chunk* chunk); 
-       
+       void consolidateChunks(Chunk* prev, Chunk* chunk);       
+
        void unsorted2bins(void* excluded);
        static constexpr void* addr_ub = (void*) 0xdeadbeefdeadbeef;
        Arena() {
@@ -105,6 +107,13 @@ class Arena {
            top_size = 0x21001;
        }
 };
+
+
+void Arena::consolidateChunks(Chunk* prev, Chunk* chunk) {
+    size_t new_size = prev->get_size() + chunk->get_size();
+    prev->set_size(new_size);
+    delete chunk;
+}
 
 void Arena::insertSmallbins(Chunk* chunk) {
     int idx = (chunk->get_size() - 0x20) / 0x10;
@@ -339,9 +348,7 @@ class Mem {
     public:
         static const size_t size = 0x21000;
         unsigned char memory[size];
-        // void free(Chunk& ch);
         void free(void* ptr);
-        // void malloc(Chunk& ch);
         void malloc(void* ptr, size_t size);
         void analyzeSteps(MemoryHistory* mh);
         void printAllChunks() const;
@@ -472,7 +479,12 @@ void Mem::free(void* addr) {
     
     // smallbin/largebin 
     // prev_inuseの確認(直前がfastbinでなくfreedだったら統合する)
-    //
+    Chunk& prev = chunks[idx - 1];
+    if (prev.isFree() == true && prev.get_size() > 0x80) {
+        main_arena.consolidateChunks(&prev, &ch);
+    }
+
+
     // 直下がtopだったらtopの位置とサイズを更新する
     if ((void*)((uint64_t)ch.get_addr() + ch.get_size()) == main_arena.top) {
         main_arena.top = ch.get_addr();
