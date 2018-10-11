@@ -317,6 +317,7 @@ void Mem::malloc(void* ptr, size_t size) {
             // chunk reuse 
             pch->set_isUsed(true);
             pch = pch->get_next();
+            sort(chunks.begin(), chunks.end());
             return;
         }
     }
@@ -325,8 +326,9 @@ void Mem::malloc(void* ptr, size_t size) {
     // unsortbinの確認
     if (main_arena.unsortedbin != nullptr) {
         printf("\tub = %p\n", main_arena.unsortedbin->get_addr());
-        Chunk* ub = main_arena.unsortedbin->get_prev();
-        
+        //Chunk*& ub = main_arena.unsortedbin->get_prev();
+        Chunk*& ub = main_arena.unsortedbin;
+        ub = ub->get_prev(); 
         printf("\ttarget ub = %p\n", ub->get_addr());
         
         // chunkの分割処理
@@ -340,11 +342,16 @@ void Mem::malloc(void* ptr, size_t size) {
             prev->set_fd(next->get_fd());
             next->set_bk(prev->get_bk());
         } else {
-            // 
-            ub->splitChunk(ub->get_size() - Chunk::reqeuset2size(size));
+            //
+            main_arena.printUnsortedbin();
             ub->set_isUsed(true); 
+            ub->splitChunk(ub->get_size() - Chunk::reqeuset2size(size));
+            printf("%x:%x\n", ub->get_addr(), ub->get_size()); 
+            printf("%p\n", ub);
+            main_arena.printUnsortedbin();
         }
 
+        sort(chunks.begin(), chunks.end());
         return ; 
     } 
     
@@ -403,7 +410,9 @@ void Mem::free(void* addr) {
         ch.set_isUsed(false);
         // unsortedbinに繋がるチャンクの最終を探す
         Chunk*& tmp = main_arena.unsortedbin;
+        printf("ch = %p\n", ch.get_addr());
         while (true) {
+            printf("\ttmp = %p\n", tmp->get_addr());
             void* fd = tmp->get_fd();
             if (fd == (void*)Arena::addr_ub) 
                 break;
@@ -412,12 +421,12 @@ void Mem::free(void* addr) {
         cout << tmp->get_addr() << endl;
         ch.set_fd((void*)tmp->get_addr());
         ch.set_bk((void*)Arena::addr_ub);
-        ch.set_bk_ch((Chunk*)tmp);
-        ch.set_fd_ch((Chunk*)&ch);
+        ch.set_fd_ch((Chunk*)tmp);
+        ch.set_bk_ch((Chunk*)&ch);
         tmp->set_fd((void*)Arena::addr_ub);
-        tmp->set_bk((void*)tmp->get_addr());
-        tmp->set_bk_ch((Chunk*)&ch);
-        tmp->set_fd_ch((Chunk*)tmp);
+        tmp->set_bk((void*)ch.get_addr());
+        tmp->set_fd_ch((Chunk*)&ch);
+        tmp->set_bk_ch((Chunk*)tmp);
         main_arena.unsortedbin = &ch;
         return;
     }
@@ -474,26 +483,29 @@ void Mem::analyzeSteps(MemoryHistory* mh) {
     main_arena.printFastbins();
     main_arena.printUnsortedbin();
     main_arena.printTop();
+    printAllChunks();
 }
 
 
 void Chunk::splitChunk(size_t new_size) {
     size_t remain = size - new_size;
-    void* new_addr = (void*)((uint64_t)addr - remain);
-    Chunk new_chunk = Chunk(new_addr, remain);
-    new_chunk.set_fd(fd);
-    new_chunk.set_bk(bk);
-    new_chunk.set_fd_ch(fd_ch);
-    new_chunk.set_bk_ch(bk_ch);
+    void* new_addr = (void*)((uint64_t)addr + remain);
+    printf("splitChunk: new_addr:0x%x new_size = %x\n", new_addr, new_size);
+    size = remain;
+    Chunk* new_chunk = new Chunk(new_addr, new_size-0x10);
+    new_chunk->set_fd(fd);
+    new_chunk->set_bk(bk);
+    new_chunk->set_fd_ch(fd_ch);
+    new_chunk->set_bk_ch(bk_ch);
+    
     Chunk* prev = bk_ch;
     Chunk* next = fd_ch;
     prev->set_fd(new_addr);
     next->set_bk(new_addr);
-    prev->set_fd_ch(&new_chunk);
-    next->set_bk_ch(&new_chunk);
-    mem.chunks.push_back(new_chunk);
-
-    size = new_size;
+    prev->set_fd_ch(new_chunk);
+    next->set_bk_ch(new_chunk);
+    new_chunk->set_isUsed(false);
+    mem.chunks.push_back(*new_chunk);
 }
 
 
