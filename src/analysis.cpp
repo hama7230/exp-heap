@@ -6,6 +6,7 @@
 
 #define NOT_USED    0xdeadbeeffeedbabe
 
+
 enum function{MALLOC, FREE, REALLOC};
 using namespace std;
 
@@ -111,8 +112,10 @@ class Arena {
 
 void Arena::consolidateChunks(Chunk* prev, Chunk* chunk) {
     size_t new_size = prev->get_size() + chunk->get_size();
+    printf("prev %p:%x\n", prev->get_addr(), prev->get_size());
+    printf("next %p:%x\n", chunk->get_addr(), chunk->get_size());
     prev->set_size(new_size);
-    delete chunk;
+    printf("prev %p:%x\n", prev->get_addr(), prev->get_size());
 }
 
 void Arena::insertSmallbins(Chunk* chunk) {
@@ -481,7 +484,9 @@ void Mem::free(void* addr) {
     // prev_inuseの確認(直前がfastbinでなくfreedだったら統合する)
     Chunk& prev = chunks[idx - 1];
     if (prev.isFree() == true && prev.get_size() > 0x80) {
+        cout << "consolidate chunks" << endl;
         main_arena.consolidateChunks(&prev, &ch);
+        chunks.erase(chunks.begin() + idx);
     }
 
 
