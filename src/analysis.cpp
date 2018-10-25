@@ -30,7 +30,6 @@ class Chunk {
         static const size_t MINSIZE = (unsigned long)(((MIN_CHUNK_SIZE+MALLOC_ALIGN_MASK) & ~MALLOC_ALIGN_MASK));
         
         static const size_t global_max_fast = 0x80;
-
         static size_t reqeuset2size(size_t req) {
             size_t result = (((req) + SIZE_SZ + MALLOC_ALIGN_MASK < MINSIZE)  ? MINSIZE : ((req) + SIZE_SZ + MALLOC_ALIGN_MASK) & ~MALLOC_ALIGN_MASK);
             return result;
@@ -67,7 +66,12 @@ class Chunk {
         Chunk* get_prev() const { return bk_ch; }
         bool operator<(const Chunk& rhs) const {return addr < rhs.addr;}
         void splitChunk(size_t new_size);
-        // void setLink()
+        void setLink(char* _fd, char* _bk, Chunk* _next, Chunk* _prev) {
+            fd = _fd;
+            bk = _bk;
+            fd_ch = _next;
+            bk_ch = _prev;
+        };
 };
 
 
@@ -94,7 +98,7 @@ class Arena {
        void insertLargebins(Chunk* chunk); 
        void consolidateChunks(Chunk* prev, Chunk* chunk);       
        int largebin_index(const size_t sz) const;
-
+       
        void unsorted2bins(char* excluded);
        static constexpr char* addr_ub = (char*)0xdeadbeefdeadbeef;
        Arena() {
@@ -152,10 +156,7 @@ void Arena::insertSmallbins(Chunk* chunk) {
         chunk->set_bk_ch(tmp);
     } else { 
         smallbins[idx] = chunk;
-        chunk->set_fd(Arena::addr_ub);
-        chunk->set_bk(Arena::addr_ub);
-        chunk->set_fd_ch(chunk);
-        chunk->set_bk_ch(chunk);
+        chunk->setLink(Arena::addr_ub, Arena::addr_ub, chunk, chunk);
     }
 
 }
@@ -175,10 +176,7 @@ void Arena::insertLargebins(Chunk* chunk) {
         chunk->set_bk_ch(tmp);
     } else { 
         largebins[idx] = chunk;
-        chunk->set_fd(Arena::addr_ub);
-        chunk->set_bk(Arena::addr_ub);
-        chunk->set_fd_ch(chunk);
-        chunk->set_bk_ch(chunk);
+        chunk->setLink(Arena::addr_ub, Arena::addr_ub, chunk, chunk);
     }
 }
 
@@ -541,10 +539,7 @@ void Mem::free(char* addr) {
     if (main_arena.unsortedbin == nullptr) {
         main_arena.unsortedbin = &ch;
         ch.set_isUsed(false);
-        ch.set_fd(Arena::addr_ub);
-        ch.set_bk(Arena::addr_ub);
-        ch.set_fd_ch((Chunk*)&ch);
-        ch.set_bk_ch((Chunk*)&ch);
+        ch.setLink(Arena::addr_ub, Arena::addr_ub, &ch, &ch);
     } else {
         ch.set_isUsed(false);
         // unsortedbinに繋がるチャンクの最終を探す
@@ -558,15 +553,8 @@ void Mem::free(char* addr) {
             tmp = tmp->get_next();
         }
         // 関数にして
-        cout << tmp->get_addr() << endl;
-        ch.set_fd(tmp->get_addr());
-        ch.set_bk(Arena::addr_ub);
-        ch.set_fd_ch((Chunk*)tmp);
-        ch.set_bk_ch((Chunk*)&ch);
-        tmp->set_fd(Arena::addr_ub);
-        tmp->set_bk(ch.get_addr());
-        tmp->set_fd_ch((Chunk*)&ch);
-        tmp->set_bk_ch((Chunk*)tmp);
+        ch.setLink(tmp->get_addr(), Arena::addr_ub, tmp, &ch);
+        tmp->setLink(Arena::addr_ub, ch.get_addr(), &ch, tmp);
         main_arena.unsortedbin = &ch;
         return;
     }
@@ -635,14 +623,12 @@ void Chunk::splitChunk(size_t new_size) {
     size = remain;
     
     Chunk* new_chunk = new Chunk(new_addr+0x10, new_size-0x10);
-    new_chunk->set_fd(Arena::addr_ub);
-    new_chunk->set_bk(Arena::addr_ub);
-    new_chunk->set_fd_ch(new_chunk);
-    new_chunk->set_bk_ch(new_chunk);
+    new_chunk->setLink(Arena::addr_ub, Arena::addr_ub, new_chunk, new_chunk);
     mem.main_arena.unsortedbin = new_chunk;
     new_chunk->set_isUsed(false);
     mem.chunks.push_back(*new_chunk);
 }
+
 
 
 int main(int argc, char* argv[]) {
