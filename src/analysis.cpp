@@ -268,8 +268,8 @@ class Step {
 class MemoryHistory {
     std::vector<Step> steps;
     public:
-       void loadLog(const std::string fileName);
-       void loadDump(const std::string fileName, char* memory);
+       void loadLog(const string& fileName);
+       void loadDump(const string& fileName, char* memory);
        void printSteps() const;
        void printStepByStep() const;
        const std::vector<Step> getSteps() const;
@@ -280,37 +280,39 @@ const std::vector<Step> MemoryHistory::getSteps() const {
     return steps;
 }
 
-void MemoryHistory::loadLog(const std::string fileName) {
+void MemoryHistory::loadLog(const string& fileName) {
     // load logfile
     string buf;
     ifstream ifs(fileName);
     while (getline(ifs, buf)) {
-        char* ptr;
+        void* ptr;
         size_t nmemb, size;
         if (buf.find("called") != string::npos) {
             if (buf.find("malloc") != string::npos) {
                 ifs >> hex >> size >> ptr;
-                steps.emplace_back(MALLOC, ptr, size, NOT_USED);
+                steps.emplace_back(MALLOC, (char*)ptr, size, NOT_USED);
             }
              if (buf.find("calloc") != string::npos) {
                 ifs >> hex >> size >> nmemb >> ptr;
-                steps.emplace_back(MALLOC, ptr, size, nmemb);
+                steps.emplace_back(MALLOC, (char*)ptr, size, nmemb);
             }
             if (buf.find("free") != string::npos) {
                 ifs >> hex >> ptr; 
-                steps.emplace_back(FREE, ptr, NOT_USED, NOT_USED);
+                steps.emplace_back(FREE, (char*)ptr, NOT_USED, NOT_USED);
             }
             if (buf.find("realloc") != string::npos) {
                 ifs >> hex >> nmemb >> size >> ptr;
-                steps.emplace_back(REALLOC, ptr, size, NOT_USED);
+                steps.emplace_back(REALLOC, (char*)ptr, size, NOT_USED);
             }
         }
     }
+    cout << fileName << endl;
 }
 
-void MemoryHistory::loadDump(const std::string fileName, char* memory) {
+void MemoryHistory::loadDump(const string& fileName, char* memory) {
     // load memory dump
     std::string path = fileName + ".dump";
+    cout << path << endl;
     ifstream ifs_dump(path,  ios::binary);
     if (!ifs_dump) {
         cout << "dump file open error" << endl;
