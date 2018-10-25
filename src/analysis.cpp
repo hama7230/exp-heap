@@ -461,15 +461,14 @@ void Mem::malloc(char* ptr, size_t size) {
                 tmp = tmp->get_next();
             }
             if (Chunk::reqeuset2size(size) > ub->get_size()) {
-                cout << "good chunks doesn't exist" << endl;
                 if (ub->get_size() < 0x400)
                     main_arena.insertSmallbins(ub);
                 else
                     main_arena.insertLargebins(ub);
                 // topからチャンクを切り出す.
                 chunks.emplace_back(ptr, size);
-                main_arena.top = ptr + size;
-                main_arena.top_size -= size;
+                main_arena.top = ptr + Chunk::reqeuset2size(size);
+                main_arena.top_size -= Chunk::reqeuset2size(size);
 
             } else {
                 ub->set_isUsed(true); 
@@ -486,8 +485,8 @@ void Mem::malloc(char* ptr, size_t size) {
     
     // topからチャンクを切り出す.
     chunks.emplace_back(ptr, size);
-    main_arena.top = ptr + size;
-    main_arena.top_size -= size;
+    main_arena.top = ptr + Chunk::reqeuset2size(size);
+    main_arena.top_size -= Chunk::reqeuset2size(size);
      
     sort(chunks.begin(), chunks.end());
 }
@@ -529,9 +528,9 @@ void Mem::free(char* addr) {
 
 
     // 直下がtopだったらtopの位置とサイズを更新する
-//:    if (main_arena.top - ch.get_addr() == ch.get_size()) {
+//    if (main_arena.top - ch.get_addr() == ch.get_size()) {
     if ((void*)((uint64_t)ch.get_addr() + ch.get_size()) == main_arena.top) {
-        main_arena.top = ch.get_addr();
+        main_arena.top = ch.get_addr() - 0x10;
         main_arena.top_size += ch.get_size();
         return;
     }
