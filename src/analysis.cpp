@@ -87,11 +87,13 @@ class Arena {
        void printFastbins() const; 
        void printUnsortedbin() const; 
        void printSmallbins() const; 
+       void printLargebins() const; 
        void printTop() const;
        
        void insertSmallbins(Chunk* chunk);
        void insertLargebins(Chunk* chunk); 
        void consolidateChunks(Chunk* prev, Chunk* chunk);       
+       int largebin_index(const size_t sz) const;
 
        void unsorted2bins(char* excluded);
        static constexpr char* addr_ub = (char*)0xdeadbeefdeadbeef;
@@ -109,6 +111,23 @@ class Arena {
            top_size = 0x21001;
        }
 };
+
+int Arena::largebin_index(const size_t sz) const {
+    uint64_t size = (uint64_t)sz;
+    if ((size >> 6) <= 48) {
+        return ((size>>6) + 48);
+    } else if ((size >> 9) <= 20) {
+        return (91+(size >> 9));
+    } else if ((size >> 12) <= 10) {
+        return (110+(size >> 12));
+    } else if ((size >> 15) <= 4) {
+        return (119 + (size>>15));
+    } else if ((size >> 18) <= 2) {
+       return (124 + (size >> 18));
+    } else {
+        return 126;
+    }
+}
 
 
 void Arena::consolidateChunks(Chunk* prev, Chunk* chunk) {
@@ -142,7 +161,7 @@ void Arena::insertSmallbins(Chunk* chunk) {
 }
 
 void Arena::insertLargebins(Chunk* chunk) {
-    int idx = (chunk->get_size() - 0x20) / 0x10;
+    int idx = largebin_index(chunk->get_size());
     if (largebins[idx] != nullptr) {
         Chunk *tmp = largebins[idx];
         while (true) {
@@ -214,7 +233,13 @@ void Arena::printSmallbins() const {
     }
 }
 
-
+void Arena::printLargebins() const {
+    cout << "=== Largebins ===" << endl;
+    for (int i=0; i < size_largebins; i++) {
+        if (largebins[i] != nullptr)
+            printf("\t[%02d] %p fd: %p bk: %p\n", i, largebins[i]->get_addr(), largebins[i]->get_fd(), largebins[i]->get_bk());
+    }
+}
 
 void Arena::printTop() const {
     cout << "=== top ===" << endl;
@@ -439,6 +464,10 @@ void Mem::malloc(char* ptr, size_t size) {
             }
             if (Chunk::reqeuset2size(size) > ub->get_size()) {
                 cout << "good chunks doesn't exist" << endl;
+                if (ub->get_size() < 0x400)
+                    main_arena.insertSmallbins(ub);
+                else
+                    main_arena.insertLargebins(ub);
                 // topからチャンクを切り出す.
                 chunks.emplace_back(ptr, size);
                 main_arena.top = ptr + size;
@@ -595,6 +624,7 @@ void Mem::analyzeSteps(MemoryHistory* mh) {
     main_arena.printUnsortedbin();
     main_arena.printTop();
     main_arena.printSmallbins();
+    main_arena.printLargebins();
 }
 
 
