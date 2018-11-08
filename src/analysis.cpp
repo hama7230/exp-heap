@@ -329,13 +329,11 @@ void MemoryHistory::loadLog(const string& fileName) {
             }
         }
     }
-    cout << fileName << endl;
 }
 
 void MemoryHistory::loadDump(const string& fileName, char* memory) {
     // load memory dump
     std::string path = fileName + ".dump";
-    cout << path << endl;
     ifstream ifs_dump(path,  ios::binary);
     if (!ifs_dump) {
         cout << "dump file open error" << endl;
@@ -631,15 +629,23 @@ void Chunk::splitChunk(size_t new_size) {
 
 
 int main(int argc, char* argv[]) {
-    if (argc != 2) {
+    if (argc < 2) {
         cerr << "Usage: filename" << endl;
         exit(1);
     }
     string path = "/tmp/trace_heap/";
     path = path + argv[1];
-    
     memoryHistory.loadLog(path);
     memoryHistory.loadDump(path, (char*)mem.memory);
+    
+    if (argc == 3) {
+        string mode = argv[2];
+        if (mode.find("invisible") != string::npos) {
+            memoryHistory.printSteps();
+            return 0;
+        }
+    }
+    
     
     while(1) {
         cout << "================================\n1. print steps\n2. print step by step\n3. analyze steps\n" << endl;
