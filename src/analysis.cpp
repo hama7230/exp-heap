@@ -638,10 +638,15 @@ int main(int argc, char* argv[]) {
     memoryHistory.loadLog(path);
     memoryHistory.loadDump(path, (char*)mem.memory);
     
-    if (argc == 3) {
+    if (argc > 2) {
         string mode = argv[2];
         if (mode.find("invisible") != string::npos) {
-            memoryHistory.printSteps();
+            string action = argv[3];
+            if (action.find("steps") != string::npos) {
+                memoryHistory.printSteps();
+            } else if (action.find("chunks") != string::npos) {
+                mem.analyzeSteps(&memoryHistory);
+            }
             return 0;
         }
     }
