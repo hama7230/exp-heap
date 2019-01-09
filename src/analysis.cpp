@@ -6,7 +6,7 @@
 
 #define NOT_USED    0xdeadbeeffeedbabe
 
-
+ 
 enum function{MALLOC, FREE, REALLOC};
 using namespace std;
 
@@ -136,8 +136,8 @@ int Arena::largebin_index(const size_t sz) const {
 
 void Arena::consolidateChunks(Chunk* prev, Chunk* chunk) {
     size_t new_size = prev->get_size() + chunk->get_size();
-    printf("prev %p:%zd\n", prev->get_addr(), prev->get_size());
-    printf("next %p:%zd\n", chunk->get_addr(), chunk->get_size());
+    // printf("prev %p:%zd\n", prev->get_addr(), prev->get_size());
+    // printf("next %p:%zd\n", chunk->get_addr(), chunk->get_size());
     prev->set_size(new_size);
 }
 
@@ -192,12 +192,12 @@ void Arena::unsorted2bins(char* excluded) {
 }
 
 void Arena::printFastbins() const {
-    cout << "=== Fastbins ===" << endl;
+    cout << "Fastbins" << endl;
     for (int i = 0; i < 7; i++) {
         if (fastbins[i] == nullptr) {
-            printf("\t(0x%x) fastbin[%d] = %p\n", 0x20+i*0x10, i, nullptr);
+            printf("(0x%x) fastbin[%d] = %p\n", 0x20+i*0x10, i, nullptr);
         } else {
-            printf("\t(0x%x) fastbin[%d] = %p", 0x20+i*0x10, i, fastbins[i]->get_addr());
+            printf("(0x%x) fastbin[%d] = %p", 0x20+i*0x10, i, fastbins[i]->get_addr());
             Chunk* tmp = fastbins[i];
             while (tmp->get_next() != nullptr) {
                 tmp = tmp->get_next();
@@ -210,20 +210,18 @@ void Arena::printFastbins() const {
 
 
 void Arena::printUnsortedbin() const {
-    cout << "=== Unsortedbin ===" << endl;
+    cout << "Unsortedbin" << endl;
     Chunk* current = unsortedbin;
     int idx = 0;
-    while (true) {
+    while (current != unsortedbin) {
         printf("\t[%02d] %p fd: %p bk: %p\n", idx, current->get_addr(), current->get_fd(), current->get_bk());
         current = current->get_next();
         idx++;
-        if (current == unsortedbin) 
-            break;
     } 
 }   
 
 void Arena::printSmallbins() const {
-    cout << "=== Smallbins ===" << endl;
+    cout << "Smallbins" << endl;
     for (int i=0; i<size_smallbins; i++) {
         if (smallbins[i] != nullptr) {
             printf("\t[%02d] %p fd: %p bk: %p\n", i, smallbins[i]->get_addr(), smallbins[i]->get_fd(), smallbins[i]->get_bk());
@@ -232,7 +230,7 @@ void Arena::printSmallbins() const {
 }
 
 void Arena::printLargebins() const {
-    cout << "=== Largebins ===" << endl;
+    cout << "Largebins" << endl;
     for (int i=0; i < size_largebins; i++) {
         if (largebins[i] != nullptr)
             printf("\t[%02d] %p fd: %p bk: %p\n", i, largebins[i]->get_addr(), largebins[i]->get_fd(), largebins[i]->get_bk());
@@ -240,8 +238,8 @@ void Arena::printLargebins() const {
 }
 
 void Arena::printTop() const {
-    cout << "=== top ===" << endl;
-    printf("\ttop = %p (size: 0x%zx)\n", top, (uintptr_t)top_size);
+    cout << "top" << endl;
+    printf("%p (size: 0x%zx)\n", top, (uintptr_t)top_size);
 }
 
 // heapに対する操作を記憶するクラス
@@ -376,7 +374,7 @@ class Mem {
         unsigned char memory[size];
         void free(char* ptr);
         void malloc(char* ptr, size_t size);
-        void analyzeSteps(MemoryHistory* mh);
+        void analyzeSteps(MemoryHistory* mh, int step);
         void printAllChunks() const;
         void printUsedChunks() const;
         void printFreedChunks() const;
@@ -541,9 +539,9 @@ void Mem::free(char* addr) {
         ch.set_isUsed(false);
         // unsortedbinに繋がるチャンクの最終を探す
         Chunk*& tmp = main_arena.unsortedbin;
-        printf("ch = %p\n", ch.get_addr());
+        // printf("ch = %p\n", ch.get_addr());
         while (true) {
-            printf("\ttmp = %p\n", tmp->get_addr());
+            // printf("\ttmp = %p\n", tmp->get_addr());
             char* fd = tmp->get_fd();
             if (fd == Arena::addr_ub) 
                 break;
@@ -560,34 +558,36 @@ void Mem::free(char* addr) {
 
 
 void Mem::printAllChunks() const {
-    cout << "=== All Chunks ====" << endl;
+    cout << "All Chunks" << endl;
     for (auto& c : chunks) {
-        printf("\t%lx:%lx:%d\n", (uint64_t)c.get_addr(),  (uint64_t)c.get_size(), c.isFree());
+        printf("%lx:%lx:%d ", (uint64_t)c.get_addr(),  (uint64_t)c.get_size(), c.isFree());
     }
+    putchar('\n');
+
 }
 
 void Mem::printUsedChunks() const {
-    cout << "=== Used Chunks ====" << endl;
+    cout << "Used Chunks" << endl;
     for(auto& c: chunks) {
         if (!c.isFree()) 
-            printf("\t%lx:%lx\n", (uint64_t)c.get_addr(),  (uint64_t)c.get_size());
+            printf("%lx:%lx\n", (uint64_t)c.get_addr(),  (uint64_t)c.get_size());
     }
-    cout << "====================" << endl;
 }
 
 void Mem::printFreedChunks() const {
-    cout << "=== Freed Chunks ====" << endl;
+    cout << "Freed Chunks" << endl;
     for(auto& c: chunks) {
         if (c.isFree()) 
-            printf("\t%lx:%lx\n", (uint64_t)c.get_addr(),  (uint64_t)c.get_size());
+            printf("%lx:%lx\n", (uint64_t)c.get_addr(),  (uint64_t)c.get_size());
     }
-    cout << "=====================" << endl;
 }
 
 
-void Mem::analyzeSteps(MemoryHistory* mh) {
+void Mem::analyzeSteps(MemoryHistory* mh, int step) {
+    int i = 0;
+
     for (auto& s : mh->getSteps()) {
-        cout << s.toString() << endl;
+        // cout << s.toString() << endl;
         switch (s.get_function()) {
             case MALLOC:
             {
@@ -600,11 +600,13 @@ void Mem::analyzeSteps(MemoryHistory* mh) {
                 break;
             }
         };
-
+        if (step == i)
+            break;
+        i++;
     }
-
-    printUsedChunks();
-    printFreedChunks();
+    printAllChunks();
+    //printUsedChunks();
+    //printFreedChunks();
     main_arena.printFastbins();
     main_arena.printUnsortedbin();
     main_arena.printTop();
@@ -616,7 +618,7 @@ void Mem::analyzeSteps(MemoryHistory* mh) {
 void Chunk::splitChunk(size_t new_size) {
     size_t remain = size - new_size;
     char* new_addr = addr + remain;
-    printf("splitChunk: new_addr:0x%p new_size = %zd\n", new_addr, new_size);
+    // printf("splitChunk: new_addr:0x%p new_size = %zd\n", new_addr, new_size);
     size = remain;
     
     Chunk* new_chunk = new Chunk(new_addr+0x10, new_size-0x10);
@@ -645,7 +647,8 @@ int main(int argc, char* argv[]) {
             if (action.find("steps") != string::npos) {
                 memoryHistory.printSteps();
             } else if (action.find("chunks") != string::npos) {
-                mem.analyzeSteps(&memoryHistory);
+                int step = atoi(argv[4]);
+                mem.analyzeSteps(&memoryHistory, step);
             }
             return 0;
         }
@@ -664,7 +667,7 @@ int main(int argc, char* argv[]) {
                 memoryHistory.printStepByStep();
                 break;
             case 3:
-                mem.analyzeSteps(&memoryHistory);
+                mem.analyzeSteps(&memoryHistory, -1);
                 break;
         }
     }
